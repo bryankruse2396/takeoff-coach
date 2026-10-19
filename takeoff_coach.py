@@ -1,5 +1,5 @@
 r"""
-Takeoff Coach  v0.23  (prototype)
+Takeoff Coach  v0.24  (prototype)
 ================================
 Coaches a learner through eTakeoff Dimension steps on top of the real program:
   * shows the instruction as a callout over eTakeoff, with an arrow to the button (Practice mode)
@@ -73,7 +73,7 @@ PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dr
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
 
-COACH_VERSION = "0.23"
+COACH_VERSION = "0.24"
 # Training site (Supabase). The publishable key is meant to be public; what each account can do is
 # enforced by the database's security rules.
 SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
@@ -85,7 +85,8 @@ ACTIVE_TEST_FILE = os.path.join(RESULTS_DIR, "active_test.json")  # a test that 
 # Where the coach looks for a newer version of itself: {"version": "0.20", "url": "...exe", "sha256": "..."}
 UPDATE_MANIFEST = "https://github.com/bryankruse2396/takeoff-coach/releases/latest/download/latest.json"
 TIERS = ["basic", "intermediate", "advanced", "expert"]
-PROJECT_PREFIX = "Takeoff Training Test - "       # + the learner's name from their training-site account
+PRACTICE_PREFIX = "Takeoff Training Practice - "  # + the learner's name from their training-site account
+TEST_PREFIX = "Takeoff Training Test - "
 SAMPLE_DIR = r"C:\ProgramData\eTakeoffProjects\eTakeoffSamples\LaQuintaHotel"
 
 
@@ -1498,7 +1499,7 @@ class Coach:
             g.columnconfigure(1, weight=1)
             tk.Button(b, text="Sign in", font=("Segoe UI Semibold", 10), command=self.sign_in).pack(anchor="e", pady=(4, 0))
         if signed and self.training_project():
-            tk.Label(b, text=f"Training project: {self.training_project()}", font=("Segoe UI", 9), fg="#5a6878",
+            tk.Label(b, text=f"Training projects: {self.training_project()}  /  {self.training_project(True)}", font=("Segoe UI", 9), fg="#5a6878",
                      bg="#f4f7fb").pack(anchor="w")
         mrow = tk.Frame(b, bg="#f4f7fb")
         mrow.pack(fill="x", pady=(8, 0))
@@ -1819,9 +1820,9 @@ class Coach:
 
     # ---------- lesson flow
     # ---------- the learner's own training project
-    def training_project(self):
+    def training_project(self, test=False):
         name = (self.cloud.account.get("name") or self.learner.get() or "").strip()
-        return PROJECT_PREFIX + name if name else ""
+        return (TEST_PREFIX if test else PRACTICE_PREFIX) + name if name else ""
 
     def _probe(self):
         """A connection to eTakeoff for checks before a lesson (the lesson makes its own)."""
@@ -1829,7 +1830,7 @@ class Coach:
             self.probe = Watcher()
         return self.probe
 
-    def _say(self, text, fg):
+    def _pre_say(self, text, fg):
         try:
             if self.status.winfo_exists():
                 return self.status.config(text=text, fg=fg)
@@ -1840,12 +1841,12 @@ class Coach:
 
     def preflight(self, then, test=False, steps=None):
         """Only train in the learner's own project, and start tests on clean drawings. Calls then() when ready."""
-        want = self.training_project()
+        want = self.training_project(test)
         h, title = find_etakeoff()
         if not h:
-            return self._say(text="Open eTakeoff Dimension first.", fg="#c0392b")
+            return self._pre_say(text="Open eTakeoff Dimension first.", fg="#c0392b")
         if not want:
-            return self._say(text="Sign in first, so the coach knows your training project's name.",
+            return self._pre_say(text="Sign in first, so the coach knows your training project's name.",
                                       fg="#c0392b")
         if norm_name(open_project_name(title)) != norm_name(want):
             try:
@@ -1854,9 +1855,10 @@ class Coach:
                 dlog(f"project list: {e!r}")
                 known = False
             if known:
-                return self._say(
+                return self._pre_say(
                     text=f'Open your training project in eTakeoff: "{want}" (File > Recent Projects). '
-                         "Practice and tests only run in your own training project.", fg="#c0392b")
+                         + ("Tests only run in your own test project." if test else
+                            "Practice only runs in your own practice project."), fg="#c0392b")
             return self.show_project_setup(then, test, steps)
         codes = drawing_codes(steps or [])
         if codes:
@@ -1875,10 +1877,11 @@ class Coach:
         """One-time: import the La Quinta sample as the learner's own training project."""
         import glob
         import subprocess
-        want = self.training_project()
+        want = self.training_project(test)
         self._clear()
-        self.h1.config(text="Set up your training project")
-        self.sub.config(text="Once. All your practice and tests happen in this project, never in a real job.")
+        self.h1.config(text="Set up your test project" if test else "Set up your practice project")
+        self.sub.config(text=("Once. All your tests happen in this project" if test else
+                              "Once. All your practice happens in this project") + ", never in a real job.")
         b = self.body
         sample = sorted(glob.glob(os.path.join(SAMPLE_DIR, "*.tpxzip")))
 
@@ -1939,7 +1942,7 @@ class Coach:
                 self.status.config(text=f'Your training project "{want}" is ready.', fg="#2e7d32")
                 self.root.after(1500, lambda: self.preflight(then, test, steps))
                 return
-            if h and open_project_name(title) and norm_name(open_project_name(title)).startswith(norm_name(PROJECT_PREFIX)):
+            if h and open_project_name(title) and any(norm_name(open_project_name(title)).startswith(norm_name(p)) for p in (PRACTICE_PREFIX, TEST_PREFIX)):
                 self.status.config(text=f'eTakeoff has "{open_project_name(title)}" open, but the name should be exactly '
                                         f'"{want}". Fix it in Home > Edit > Description, then click OK.', fg="#a15c00")
             self.root.after(2000, watch)
