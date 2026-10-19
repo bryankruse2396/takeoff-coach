@@ -1,5 +1,5 @@
 r"""
-Takeoff Coach  v0.22  (prototype)
+Takeoff Coach  v0.23  (prototype)
 ================================
 Coaches a learner through eTakeoff Dimension steps on top of the real program:
   * shows the instruction as a callout over eTakeoff, with an arrow to the button (Practice mode)
@@ -73,7 +73,7 @@ PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dr
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
 
-COACH_VERSION = "0.22"
+COACH_VERSION = "0.23"
 # Training site (Supabase). The publishable key is meant to be public; what each account can do is
 # enforced by the database's security rules.
 SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
@@ -85,6 +85,27 @@ ACTIVE_TEST_FILE = os.path.join(RESULTS_DIR, "active_test.json")  # a test that 
 # Where the coach looks for a newer version of itself: {"version": "0.20", "url": "...exe", "sha256": "..."}
 UPDATE_MANIFEST = "https://github.com/bryankruse2396/takeoff-coach/releases/latest/download/latest.json"
 TIERS = ["basic", "intermediate", "advanced", "expert"]
+PROJECT_PREFIX = "Takeoff Training Test - "       # + the learner's name from their training-site account
+SAMPLE_DIR = r"C:\ProgramData\eTakeoffProjects\eTakeoffSamples\LaQuintaHotel"
+
+
+def norm_name(t):
+    """Compare project names ignoring case, extra spaces and the kind of dash."""
+    return " ".join((t or "").replace("\u2013", "-").replace("\u2014", "-").lower().split())
+
+
+def open_project_name(title):
+    return title.split("Project:", 1)[1].strip() if title and "Project:" in title else ""
+
+
+def drawing_codes(steps):
+    """Sheet codes a set of steps works on, e.g. {'A1.1'} from steps marked dwg='A1.1'."""
+    return {st["dwg"] for st in steps if st.get("dwg")}
+
+
+def on_drawings(rec, codes):
+    d = (rec.get("dwg") or "").upper()
+    return any(re.search(r"(^|\s)" + re.escape(c.upper()) + r"(\s|$)", d) for c in codes)
 TLB = r"C:\Program Files (x86)\eTakeoff\RView\ETkoInfc64.tlb" if struct.calcsize("P") == 8 \
     else r"C:\Program Files (x86)\eTakeoff\RView\ETkoInfc.tlb"
 user32 = ctypes.windll.user32
@@ -1476,6 +1497,9 @@ class Coach:
             pw.bind("<Return>", lambda e: self.sign_in())
             g.columnconfigure(1, weight=1)
             tk.Button(b, text="Sign in", font=("Segoe UI Semibold", 10), command=self.sign_in).pack(anchor="e", pady=(4, 0))
+        if signed and self.training_project():
+            tk.Label(b, text=f"Training project: {self.training_project()}", font=("Segoe UI", 9), fg="#5a6878",
+                     bg="#f4f7fb").pack(anchor="w")
         mrow = tk.Frame(b, bg="#f4f7fb")
         mrow.pack(fill="x", pady=(8, 0))
         tk.Radiobutton(mrow, text="Practice", variable=self.mode, value="practice", bg="#f4f7fb", font=self.font,
@@ -1794,9 +1818,170 @@ class Coach:
         self.showing_found_until = time.time() + 2.5
 
     # ---------- lesson flow
+    # ---------- the learner's own training project
+    def training_project(self):
+        name = (self.cloud.account.get("name") or self.learner.get() or "").strip()
+        return PROJECT_PREFIX + name if name else ""
+
+    def _probe(self):
+        """A connection to eTakeoff for checks before a lesson (the lesson makes its own)."""
+        if getattr(self, "probe", None) is None:
+            self.probe = Watcher()
+        return self.probe
+
+    def _say(self, text, fg):
+        try:
+            if self.status.winfo_exists():
+                return self.status.config(text=text, fg=fg)
+        except Exception:
+            pass
+        self._show_start()
+        self.status.config(text=text, fg=fg)
+
+    def preflight(self, then, test=False, steps=None):
+        """Only train in the learner's own project, and start tests on clean drawings. Calls then() when ready."""
+        want = self.training_project()
+        h, title = find_etakeoff()
+        if not h:
+            return self._say(text="Open eTakeoff Dimension first.", fg="#c0392b")
+        if not want:
+            return self._say(text="Sign in first, so the coach knows your training project's name.",
+                                      fg="#c0392b")
+        if norm_name(open_project_name(title)) != norm_name(want):
+            try:
+                known = any(norm_name(n) == norm_name(want) for _, n in self._probe().projects())
+            except Exception as e:
+                dlog(f"project list: {e!r}")
+                known = False
+            if known:
+                return self._say(
+                    text=f'Open your training project in eTakeoff: "{want}" (File > Recent Projects). '
+                         "Practice and tests only run in your own training project.", fg="#c0392b")
+            return self.show_project_setup(then, test, steps)
+        codes = drawing_codes(steps or [])
+        if codes:
+            try:
+                w = self._probe()
+                w.bind_to_window_title(title)
+                left = [r for r in w.read_all().values() if on_drawings(r, codes)]
+            except Exception as e:
+                dlog(f"clean check: {e!r}")
+                left = []
+            if left:
+                return self.show_clear_drawing(then, test, steps, len(left), codes)
+        then()
+
+    def show_project_setup(self, then, test, steps):
+        """One-time: import the La Quinta sample as the learner's own training project."""
+        import glob
+        import subprocess
+        want = self.training_project()
+        self._clear()
+        self.h1.config(text="Set up your training project")
+        self.sub.config(text="Once. All your practice and tests happen in this project, never in a real job.")
+        b = self.body
+        sample = sorted(glob.glob(os.path.join(SAMPLE_DIR, "*.tpxzip")))
+
+        def open_folder():
+            if sample:
+                subprocess.Popen(["explorer", "/select,", sample[0]])
+            elif os.path.isdir(SAMPLE_DIR):
+                os.startfile(SAMPLE_DIR)
+            else:
+                self.status.config(text=f"The sample project isn't in {SAMPLE_DIR}. It comes with eTakeoff "
+                                        "Dimension; ask whoever installed it.", fg="#c0392b")
+        lines = [
+            ("1.", "Click Open the sample folder. In the folder, double-click the La Quinta .tpxzip file "
+                   "(LA QUINTA HOTEL - Extended SampleExport). eTakeoff imports it and opens Project Properties."),
+            ("2.", "In Project Properties, replace the Description with exactly:"),
+        ]
+        for n, t in lines:
+            row = tk.Frame(b, bg="#f4f7fb")
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=n, font=self.font, bg="#f4f7fb", width=2, anchor="nw").pack(side="left", anchor="n")
+            tk.Label(row, text=t, font=self.font, bg="#f4f7fb", justify="left", anchor="w",
+                     wraplength=int(390 * self.k)).pack(side="left", fill="x")
+        nrow = tk.Frame(b, bg="#f4f7fb")
+        nrow.pack(fill="x", padx=(22, 0), pady=(0, 4))
+        tk.Label(nrow, text=want, font=("Segoe UI Semibold", 11), bg="#ffffff", relief="solid", bd=1,
+                 padx=6, pady=2).pack(side="left")
+
+        def copy():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(want)
+            self.status.config(text="Name copied. Paste it into Description with Ctrl+V.", fg="#2e7d32")
+        tk.Button(nrow, text="Copy", font=("Segoe UI", 9), command=copy).pack(side="left", padx=6)
+        row = tk.Frame(b, bg="#f4f7fb")
+        row.pack(fill="x", pady=2)
+        tk.Label(row, text="3.", font=self.font, bg="#f4f7fb", width=2, anchor="nw").pack(side="left", anchor="n")
+        tk.Label(row, text="Click OK. In Add Drawings to Project, leave every drawing ticked and click Add.",
+                 font=self.font, bg="#f4f7fb", justify="left", anchor="w",
+                 wraplength=int(390 * self.k)).pack(side="left", fill="x")
+        self.status = tk.Label(b, text="Waiting for your training project to open in eTakeoff...",
+                               font=("Segoe UI", 9), fg="#5a6878", bg="#f4f7fb", wraplength=int(410 * self.k),
+                               justify="left")
+        self.status.pack(anchor="w", pady=(8, 0))
+        bottom = tk.Frame(b, bg="#f4f7fb")
+        bottom.pack(fill="x", side="bottom")
+        tk.Button(bottom, text="Back", font=self.font, command=self.go_home).pack(side="left")
+        tk.Button(bottom, text="Open the sample folder", font=("Segoe UI Semibold", 10),
+                  command=open_folder).pack(side="right")
+        token = object()
+        self.setup_token = token
+
+        def watch():
+            if getattr(self, "setup_token", None) is not token:
+                return  # left the screen
+            h, title = find_etakeoff()
+            if h and norm_name(open_project_name(title)) == norm_name(want):
+                self.setup_token = None
+                dlog(f"training project ready: {want}")
+                self.status.config(text=f'Your training project "{want}" is ready.', fg="#2e7d32")
+                self.root.after(1500, lambda: self.preflight(then, test, steps))
+                return
+            if h and open_project_name(title) and norm_name(open_project_name(title)).startswith(norm_name(PROJECT_PREFIX)):
+                self.status.config(text=f'eTakeoff has "{open_project_name(title)}" open, but the name should be exactly '
+                                        f'"{want}". Fix it in Home > Edit > Description, then click OK.', fg="#a15c00")
+            self.root.after(2000, watch)
+        self.root.after(2000, watch)
+
+    def show_clear_drawing(self, then, test, steps, count, codes):
+        sheets = ", ".join(sorted(codes))
+        self._clear()
+        self.h1.config(text="Clear the drawing first" if test else "Start on a clean drawing?")
+        self.sub.config(text=f"{count} measurement{'s' if count != 1 else ''} already on {sheets}")
+        tk.Label(self.body, text=(f"{'A test starts on a clean drawing.' if test else 'Old practice traces make the drawing hard to read.'} "
+                                  f"In eTakeoff, open {sheets}, click Multi-Select, drag a box around the whole drawing "
+                                  "and press Delete. Then click Check again."),
+                 font=("Segoe UI", 11), bg="#f4f7fb", wraplength=int(420 * self.k), justify="left").pack(anchor="w")
+        self.status = tk.Label(self.body, text="", font=("Segoe UI", 9), fg="#5a6878", bg="#f4f7fb",
+                               wraplength=int(410 * self.k), justify="left")
+        self.status.pack(anchor="w", pady=(8, 0))
+        bottom = tk.Frame(self.body, bg="#f4f7fb")
+        bottom.pack(fill="x", side="bottom")
+        tk.Button(bottom, text="Back", font=self.font, command=self.go_home).pack(side="left")
+        if not test:
+            tk.Button(bottom, text="Start anyway", font=self.font, command=then).pack(side="left", padx=6)
+        tk.Button(bottom, text="Check again", font=("Segoe UI Semibold", 10),
+                  command=lambda: self.preflight(then, test, steps)).pack(side="right")
+
+    def _test_pool_steps(self, test_id):
+        """Steps of every block a test can draw (to know which drawings must be clean)."""
+        cat = read_catalog() or {}
+        t = next((x for x in cat.get("tests") or [] if x["id"] == test_id), None)
+        pool = (t or {}).get("block_ids") or [b["id"] for b in cat.get("blocks") or [] if b.get("tier") == (t or {}).get("tier")]
+        return build_steps(pool, cat.get("blocks") or [])
+
     def start_clicked(self):
         if self.mode.get() == "test":
-            return self.begin_test()
+            tests = (read_catalog() or {}).get("tests") or []
+            names = [f"{t['tier'].title()} \u00b7 {t['title']}" for t in tests]
+            t = tests[names.index(self.test_choice.get())] if self.test_choice.get() in names else None
+            return self.preflight(self.begin_test, test=True, steps=self._test_pool_steps(t["id"]) if t else [])
+        les = next((l for l in self.lessons if tier_label(l) == self.lesson_title.get()), None)
+        return self.preflight(self._start_practice, steps=(les or LESSON)["steps"])
+
+    def _start_practice(self):
         global LESSON
         les = next((l for l in self.lessons if tier_label(l) == self.lesson_title.get()), None)
         if les:
@@ -2195,7 +2380,7 @@ class Coach:
         self.mode.set("practice")
         self.answers = apply_answer_key()
         dlog(f"practice what was missed: {title}")
-        self.start_lesson()
+        self.preflight(self.start_lesson, steps=LESSON["steps"])
 
     def _close_step(self, status, score, note=""):
         self.cur.update(status=status, score=score, note=note, seconds=round(time.time() - self.cur["t0"], 1))
@@ -2730,6 +2915,7 @@ class Coach:
         self.sync_in_background()
 
     def go_home(self):
+        self.setup_token = None
         self._hide_warning()
         self.step_i = -1
         self.step_i_locked = -1
@@ -2741,7 +2927,7 @@ class Coach:
 
     def start_lesson_titled(self, title):
         self.choose_lesson(title)
-        self.start_lesson()
+        self.preflight(self.start_lesson, steps=LESSON["steps"])
 
     def finish(self):
         if self.step_i < 0:
