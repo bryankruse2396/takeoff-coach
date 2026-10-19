@@ -1,5 +1,5 @@
 r"""
-Takeoff Coach  v0.24  (prototype)
+Takeoff Coach  v0.25  (prototype)
 ================================
 Coaches a learner through eTakeoff Dimension steps on top of the real program:
   * shows the instruction as a callout over eTakeoff, with an arrow to the button (Practice mode)
@@ -73,7 +73,7 @@ PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dr
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
 
-COACH_VERSION = "0.24"
+COACH_VERSION = "0.25"
 # Training site (Supabase). The publishable key is meant to be public; what each account can do is
 # enforced by the database's security rules.
 SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
@@ -1188,11 +1188,12 @@ def evaluate(step, rec):
         return False, f"That measurement is on {rec['dwg']}. Do this one on 004 A1.1 1st Floor Plan.", "Navigating drawings"
     if rec.get("qty") is not None and abs(rec["qty"] - val) > max(0.01, abs(val) * 0.001):
         if not rec.get("trace") and rec.get("primary"):
-            return (False, f"That's an {rec['primary'].title()} measurement ({rec['qty']:,.2f}), not a {kind}. Delete it and "
-                           f"use a {kind.title()} trace: click {kind.title()} on the Home tab or double-click "
+            an = lambda w: ("an " if w[:1].lower() in "aeiou" else "a ") + w
+            return (False, f"That's {an(rec['primary'].title())} measurement ({rec['qty']:,.2f}), not {an(kind)}. Delete it and "
+                           f"use {an(kind.title())} trace: click {kind.title()} on the Home tab or double-click "
                            f"'{kind.title()}' in the Traces list.", "Choosing the right trace")
         return (False, f"That measurement used the trace '{rec['trace']}', whose main quantity isn't {kind} "
-                       f"(it reports {rec['qty']:,.2f}). Delete it and use a {kind.title()} trace: double-click "
+                       f"(it reports {rec['qty']:,.2f}). Delete it and use {('an ' if kind[0] in 'aeiou' else 'a ') + kind.title()} trace: double-click "
                        f"'{kind.title()}' in the Traces list.",
                 "Choosing the right trace")
     if "expected" not in step:
@@ -1712,7 +1713,7 @@ class Coach:
             self.status.config(text="Needs eTakeoff open, the screen-reading packages, and Record Quantity List.", fg="#c0392b")
             return
         self.status.config(text="Reading...", fg="#5a6878")
-        self.reader.submit("test", *self.reader.grab(box))
+        self.reader.submit("test", *self._grab_clear(box))
 
     def _say(self, text, color):
         if getattr(self, "status", None) is not None and self.status.winfo_exists():
@@ -2613,6 +2614,20 @@ class Coach:
             return self._screen_fail(parsed, msg, None)
         ok, msg, skill = evaluate(s, rec)
         dlog(f"grade {s['id']} from screen: {ok} {msg}")
+        if not ok and skill == "Choosing the right trace":
+            # Which line of the Quantity List is the main quantity is read from its shading, which can be misread.
+            # eTakeoff's own data knows the trace for sure: use it when it has the measurement.
+            exact = self._exact_record(parsed)
+            if exact:
+                ok, msg, skill = evaluate(s, exact)
+                dlog(f"  re-graded from eTakeoff data ({exact['trace']} {exact['qty']:.2f} {exact.get('uom')}): {ok} {msg}")
+            elif not parsed["header"] or kind in rec["has"]:
+                # Not sure, and the reading does include the quantity asked for: don't count a miss on a guess.
+                dlog("  trace unclear from the screen and eTakeoff hasn't published it yet: not graded")
+                if forced:
+                    self._render_step("The coach couldn't tell which trace that measurement used yet. Click your "
+                                      "measurement once, wait a second, then click Check again.", ok=False)
+                return "wait" if not forced else None
         if ok:
             self.cur["graded_val"] = (kind, {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[kind])
             self.passed_vals.add(parsed["sig"][1])
@@ -2673,6 +2688,26 @@ class Coach:
             if key and abs((rec.get(key) or 0) - drew[1]) < 0.011 and rec.get("desc") and rec["desc"] != rec["trace"]:
                 return rec["desc"]
         return None
+
+    def _exact_record(self, parsed):
+        """eTakeoff's own record of the measurement shown in the Quantity List (matched by its quantities),
+        or None if it hasn't published it yet."""
+        if not self.watcher:
+            return None
+        try:
+            rows = list(self.watcher.read_all().values())
+        except Exception as e:
+            dlog(f"exact record lookup failed: {e!r}")
+            return None
+        vals = {k: v for k, v in parsed["values"].items() if k in ("area", "length", "perimeter") and v}
+        if not vals:
+            return None
+        field = {"area": "area", "length": "length", "perimeter": "perim"}
+        hits = [r for r in rows if all(abs((r.get(field[k]) or 0) - v) < 0.011 for k, v in vals.items())]
+        if not hits or len({h["guid"] for h in hits}) != 1:
+            return None  # not published yet, or two measurements with the same numbers
+        own = [h for h in hits if any(abs((h.get("qty") or 0) - (h.get(f) or 0)) < 0.011 for f in ("area", "length", "perim"))]
+        return (own or hits)[0]
 
     def _screen_fail(self, parsed, msg, skill):
         # Only count a miss once per distinct result, and not while the learner may still be clicking points.
@@ -2845,6 +2880,44 @@ class Coach:
         except OSError as e:
             dlog(f"could not save prefs: {e!r}")
 
+    def _off_qty_list(self, x, y, cw, ch, l, t, w, ht):
+        """The coach reads the Quantity List off the screen, so the callout must never sit on it.
+        If it would, show it just beside the list instead (the learner's chosen spot is kept)."""
+        q = self.targets.get("qtylist")
+        if not q:
+            return x, y
+        qx1, qy1, qx2, qy2 = l + q[0], t + q[1], l + q[2], t + q[3]
+        if x >= qx2 or x + cw <= qx1 or y >= qy2 or y + ch <= qy1:
+            return x, y
+        options = [(qx2 + 10, y), (x, qy2 + 10), (x, qy1 - ch - 10), (qx1 - cw - 10, y)]
+        for nx, ny in options:
+            if l <= nx and nx + cw <= l + w and t <= ny and ny + ch <= t + ht:
+                return nx, ny
+        return qx2 + 10, y
+
+    def _grab_clear(self, box):
+        """Screenshot the Quantity List with the callout out of the picture, even if it was dragged over it."""
+        c = getattr(self, "callout", None)
+        hide = False
+        try:
+            if c is not None and c.state() != "withdrawn":
+                cx, cy = c.winfo_rootx(), c.winfo_rooty()
+                cw, ch = c.winfo_width(), c.winfo_height()
+                l, t, r, b = box
+                hide = not (cx >= r or cx + cw <= l or cy >= b or cy + ch <= t)
+        except Exception:
+            hide = False
+        if not hide:
+            return self.reader.grab(box)
+        c.withdraw()
+        c.update()
+        time.sleep(0.05)  # let Windows repaint what was under it
+        try:
+            return self.reader.grab(box)
+        finally:
+            c.deiconify()
+            c.lift()
+
     def _hide_overlay(self):
         self.overlay.withdraw()
         self.callout.withdraw()
@@ -2864,6 +2937,7 @@ class Coach:
         else:  # follow eTakeoff if its window moves; keep fully on it
             x = l + min(int(self.callout_pos[0] * w), max(0, w - cw))
             y = t + min(int(self.callout_pos[1] * ht), max(0, ht - ch))
+            x, y = self._off_qty_list(x, y, cw, ch, l, t, w, ht)
             c.geometry(f"+{x}+{y}")
         if c.state() == "withdrawn":
             c.deiconify()  # placed first, so it never flashes up in the screen corner
@@ -3194,11 +3268,11 @@ class Coach:
         if self.finish_at and time.time() >= self.finish_at:
             self.finish_at = None
             dlog(f"checking Quantity List at {box}")
-            self.reader.submit("check", *self.reader.grab(box))
+            self.reader.submit("check", *self._grab_clear(box))
             return
         # background reading (for the log and for "what was showing when this step began"), once a second
-        if self.ticks % 10 == 0:
-            w, h, rgb = self.reader.grab(box)
+        if self.ticks % 10 == 0 and not getattr(self, "callout_drag", None):
+            w, h, rgb = self._grab_clear(box)
             hsh = hash(rgb)
             if hsh != self.qty_hash and self.reader.jobs.qsize() < 2:
                 self.qty_hash = hsh
