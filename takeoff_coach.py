@@ -1,5 +1,5 @@
 r"""
-Takeoff Coach  v0.21  (prototype)
+Takeoff Coach  v0.22  (prototype)
 ================================
 Coaches a learner through eTakeoff Dimension steps on top of the real program:
   * shows the instruction as a callout over eTakeoff, with an arrow to the button (Practice mode)
@@ -73,7 +73,7 @@ PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dr
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
 
-COACH_VERSION = "0.21"
+COACH_VERSION = "0.22"
 # Training site (Supabase). The publishable key is meant to be public; what each account can do is
 # enforced by the database's security rules.
 SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
@@ -749,11 +749,35 @@ NUM_ROW = re.compile(r"^[^\w\-.]*(?:[Il|!]\s+)?(-?[\d,]*\.?\d+)\s+([A-Za-z].*?)\
 NUM_ONLY = re.compile(r"^[^\w\-.]*(-?[\d,]*\.?\d+)\W*$")
 
 
+def ocr_fold(t):
+    """Fold the letter shapes screen reading mixes up in eTakeoff's bold font, so 'Wall' read as 'Wan',
+    'Wa1l' or 'WaII' still matches: i/1/|/! look like l, 'll' can read as 'n', 'rn' as 'm', 0 as o."""
+    t = " ".join(re.sub(r"[^a-z0-9|!]+", " ", (t or "").lower()).split())
+    t = re.sub(r"[i1|!]", "l", t).replace("rn", "m").replace("0", "o")
+    return t.replace("ll", "n")
+
+
 def same_text(a, b):
-    """Typed descriptions read back by OCR: ignore case, spacing and punctuation, forgive a misread letter."""
-    na = " ".join(re.sub(r"[^a-z0-9]+", " ", (a or "").lower()).split())
-    nb = " ".join(re.sub(r"[^a-z0-9]+", " ", (b or "").lower()).split())
-    return na == nb or (len(nb) > 3 and difflib.SequenceMatcher(None, na, nb).ratio() >= 0.88)
+    """Typed descriptions read back by OCR: ignore case, spacing and punctuation, allow for the font's
+    look-alike letters, and forgive one stray misread letter in longer text."""
+    na, nb = ocr_fold(a), ocr_fold(b)
+    return na == nb or (len(nb) > 5 and edit_distance(na, nb) <= 1)
+
+
+def edit_distance(a, b):
+    """Letters added, removed or changed to turn a into b."""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def exact_text(a, b):
+    """Descriptions read straight from eTakeoff's data: exact apart from case and spacing."""
+    return " ".join((a or "").lower().split()) == " ".join((b or "").lower().split())
 
 
 def merge_rows(lines):
@@ -1960,16 +1984,29 @@ class Coach:
             self.lesson_kb = keyboard.Listener(on_press=_finish_key)
             self.lesson_kb.start()
         self.results = []
+        self.parked = {}
+        self.reviewing = False
         self.step_i = -1
         self.step_i_locked = -1
         self.finish_at = None
         self.next_step()
 
     def next_step(self):
-        self.step_i += 1
-        if self.step_i >= len(LESSON["steps"]):
-            return self.finish()
-        s = LESSON["steps"][self.step_i]
+        """Open the next step without a result: the next one after this, else any earlier one left open
+        (a step redone from the test review). None left: a test goes to its review, practice finishes."""
+        steps = LESSON["steps"]
+        done = {r["id"] for r in self.results}
+        later = [i for i, st in enumerate(steps) if st["id"] not in done and i > self.step_i]
+        left = later or [i for i, st in enumerate(steps) if st["id"] not in done]
+        if not left:
+            return self.review_test() if self.test else self.finish()
+        self._open_step(left[0])
+
+    def _open_step(self, idx, carry=None):
+        self.step_i = idx
+        self.reviewing = False
+        s = LESSON["steps"][idx]
+        carry = carry or self.parked.pop(s["id"], None)
         self.nudged, self.select_was_active = False, True
         self.cur = {"id": s["id"], "skill": s["skill"], "page": s["page"], "type": s["type"],
                     "ungraded": bool(s.get("ungraded")), "wrong": 0,
@@ -1977,6 +2014,20 @@ class Coach:
         self.hint_on = False
         # measurements that already existed when this step began are never graded for it
         self.step_known = {k[0] for k in self.watcher.state} | self.watcher.baseline_guids
+        if carry:  # reopened (Back, or Redo in a test review): what happened before still counts
+            for k in ("wrong", "hints", "clicks"):
+                self.cur[k] = carry.get(k, 0)
+            self.cur["failed"] = set(carry.get("failed", set()))
+            for k in ("missed_skills", "misses"):
+                if carry.get(k):
+                    self.cur[k] = list(carry[k])
+            self.cur["t0"] = time.time() - carry.get("seconds", 0)
+            self.cur["reopened"] = carry.get("reopened", 0) + (1 if carry.get("status") else 0)
+            if carry.get("_known") is not None:
+                self.step_known = carry["_known"]
+            if carry.get("_passed_sig") is not None:
+                self.passed_vals.discard(carry["_passed_sig"])  # its own measurement may be submitted again
+        self.cur["_known"] = self.step_known
         self.qty_at_start = self.qty_last["sig"] if self.qty_last else None
         self.finish_at = None
         self.qty_failed_sigs = set()
@@ -2011,6 +2062,8 @@ class Coach:
         if s["type"] in ("measure", "describe"):
             if s["type"] == "measure":
                 tk.Button(brow, text="Done, check it later", command=self.defer, font=self.font).pack(side="left", padx=6)
+        if self._back_target() is not None:
+            tk.Button(row, text="\u2190 Back", command=self.go_back, font=self.font).pack(side="left", padx=(0, 6))
         tk.Button(row, text="Hint", command=self.hint, font=self.font).pack(side="left")
         tk.Button(row, text="Skip step", command=self.skip, font=self.font).pack(side="left", padx=6)
         tk.Button(row, text="End test" if self.test else "Stop lesson", command=self.stop_lesson,
@@ -2028,6 +2081,121 @@ class Coach:
 
     def skip(self):
         self._close_step("skipped", 0)
+
+    def _back_target(self):
+        """Index of the step Back reopens: the nearest earlier step that has a result."""
+        done = {r["id"] for r in self.results}
+        earlier = [i for i in range(self.step_i) if LESSON["steps"][i]["id"] in done]
+        return earlier[-1] if earlier else None
+
+    def go_back(self):
+        if getattr(self, "step_i_locked", -1) == self.step_i:
+            return  # this step is passing right now
+        idx = self._back_target()
+        if idx is None:
+            return
+        sid = LESSON["steps"][idx]["id"]
+        prev = next(r for r in self.results if r["id"] == sid)
+        self.results.remove(prev)
+        self.cur["seconds"] = round(time.time() - self.cur["t0"], 1)
+        self.parked[self.cur["id"]] = self.cur  # this step's tries so far are kept for when it comes back
+        dlog(f"back: {self.cur['id']} -> {sid}")
+        self.step_i_locked = -1
+        self._open_step(idx, carry=prev)
+
+    # ---------- the test review: check and redo tasks before submitting
+    def review_test(self):
+        self.step_i = len(LESSON["steps"])
+        self.reviewing = True
+        self._hide_overlay()
+        self._clear()
+        t = self.test
+        self.h1.config(text="Review your test")
+        self.sub.config(text=f"TEST \u00b7 {t['title']} \u00b7 not submitted yet")
+        tk.Label(self.body, text=f"Redo any task you want to fix, then submit. You can't change it after you submit. "
+                                 f"The test still ends after {t['timeout'] // 60} minutes with no activity.",
+                 font=("Segoe UI", 10), bg="#f4f7fb", wraplength=int(420 * self.k), justify="left").pack(anchor="w")
+        res = {r["id"]: r for r in self.results}
+        box = tk.Frame(self.body, bg="#f4f7fb")
+        box.pack(fill="x", pady=(8, 0))
+        for n, bid in enumerate(LESSON.get("block_ids") or [], 1):
+            steps = [st for st in LESSON["steps"] if st.get("block") == bid and not st.get("ungraded")]
+            rs = [res.get(st["id"]) for st in steps]
+            if any(r and r["status"] == "pending" for r in rs):
+                mark, color = "\u2026 waiting for eTakeoff", "#a15c00"
+            elif all(r and r["status"].startswith("passed") for r in rs):
+                mark, color = "\u2713 done", "#1b5e20"
+            else:
+                mark, color = "\u2717 not right yet", "#8e2a1f"
+            row = tk.Frame(box, bg="#f4f7fb")
+            row.pack(fill="x", pady=2)
+            title = next((st.get("block_title") for st in LESSON["steps"] if st.get("block") == bid), bid)
+            tk.Label(row, text=f"{n}. {title}", font=self.font, bg="#f4f7fb", anchor="w").pack(side="left")
+            tk.Button(row, text="Redo", font=("Segoe UI", 9), command=lambda b=bid: self.redo_block(b)).pack(side="right")
+            tk.Label(row, text=mark, font=("Segoe UI", 9), fg=color, bg="#f4f7fb").pack(side="right", padx=8)
+        bottom = tk.Frame(self.body, bg="#f4f7fb")
+        bottom.pack(fill="x", side="bottom")
+        tk.Button(bottom, text="End test", font=self.font, command=self.stop_lesson).pack(side="left")
+        tk.Button(bottom, text="Submit test", font=("Segoe UI Semibold", 10), command=self.submit_test).pack(side="right")
+
+    def redo_block(self, bid):
+        ids = [st["id"] for st in LESSON["steps"] if st.get("block") == bid]
+        for r in [r for r in self.results if r["id"] in ids]:
+            self.results.remove(r)
+            self.parked[r["id"]] = r
+        first = min(i for i, st in enumerate(LESSON["steps"]) if st["id"] in ids)
+        dlog(f"redo task {bid}")
+        self.reviewing = False
+        self.step_i = first - 1
+        self.next_step()
+
+    def submit_test(self):
+        from tkinter import messagebox
+        if messagebox.askyesno("Submit test", "Submit your test now? It can't be changed afterwards.",
+                               parent=self.root):
+            self.reviewing = False
+            self.finish()
+
+    # ---------- after a session: practice just what was missed
+    def _missed_tasks(self, results):
+        """[(title, lesson_id, steps)] for each task with a step not right on the first try, in practice wording."""
+        cat = read_catalog() or {}
+        blocks = cat.get("blocks") or []
+        by_id = {b["id"]: b for b in blocks}
+        missed = [r for r in results if not r.get("ungraded")
+                  and not (r["status"].startswith("passed") and r["score"] == 100)]
+        out, seen = [], set()
+        for r in missed:
+            st = next((x for x in LESSON["steps"] if x["id"] == r["id"]), None)
+            bid = st.get("block") if st else None
+            if bid and bid in by_id:
+                if bid in seen:
+                    continue
+                seen.add(bid)
+                lesson = next((l["id"] for l in cat.get("lessons") or [] if bid in (l.get("block_ids") or [])),
+                              LESSON["id"])
+                out.append((by_id[bid]["title"], lesson, build_steps([bid], blocks)))
+            elif st and not self.test_was:
+                # a lesson file without blocks: this step plus the measurement it describes
+                need = [x for x in LESSON["steps"] if x["id"] in (st["id"], st.get("of"))]
+                if st["id"] not in seen:
+                    seen.add(st["id"])
+                    out.append((st["text"][:60] + ("..." if len(st["text"]) > 60 else ""), LESSON["id"], need))
+        return out
+
+    def start_retry(self, title, lesson_id, steps):
+        global LESSON
+        base = LESSON
+        LESSON = {"id": lesson_id, "title": f"{title} (practice)", "tier": base.get("tier"), "version": 1,
+                  "drawing": base.get("drawing", "004 A1.1 1st Floor Plan"), "scale": base.get("scale", ""),
+                  "grading": base.get("grading", {"full_credit_within": 0.03, "pass_within": 0.10, "partial_score": 75}),
+                  "block_ids": list(dict.fromkeys(st.get("block") for st in steps if st.get("block"))),
+                  "steps": copy.deepcopy(steps)}
+        self.test = None
+        self.mode.set("practice")
+        self.answers = apply_answer_key()
+        dlog(f"practice what was missed: {title}")
+        self.start_lesson()
 
     def _close_step(self, status, score, note=""):
         self.cur.update(status=status, score=score, note=note, seconds=round(time.time() - self.cur["t0"], 1))
@@ -2250,6 +2418,7 @@ class Coach:
             if ok:
                 self.cur["graded_val"] = (kind, {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[kind])
                 self.passed_vals.add(parsed["sig"][1])
+                self.cur["_passed_sig"] = parsed["sig"][1]
                 return self._pass(msg, partial=(ok == "partial"))
             if not forced and quiet < 4:
                 return "wait"
@@ -2259,6 +2428,7 @@ class Coach:
         if ok:
             self.cur["graded_val"] = (kind, {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[kind])
             self.passed_vals.add(parsed["sig"][1])
+            self.cur["_passed_sig"] = parsed["sig"][1]
             return self._pass(msg, partial=(ok == "partial"))
         if not forced and quiet < 4:
             return "wait"  # they may still be clicking corners; look again shortly
@@ -2281,9 +2451,15 @@ class Coach:
             return
         named = name and name.lower() not in DEFAULT_NAMES
         if named and (not want or same_text(name, want)):
-            return self._pass(f"Named it \"{name}\".")
+            return self._pass(f"Named it \"{want or name}\".")
         if not forced:
             return  # still typing, or the list hasn't caught up yet
+        exact = self._exact_description(drew)
+        if exact is not None:
+            dlog(f"describe {s['id']}: screen read '{name}', eTakeoff's data says '{exact}'")
+            if not want or exact_text(exact, want):
+                return self._pass(f"Named it \"{exact}\".")
+            name, named = exact, True
         if named:
             msg = f"The description reads \"{name}\". It should be exactly \"{want}\". Press D again and fix it."
             if ("desc", name.lower()) not in self.qty_failed_sigs:
@@ -2293,6 +2469,22 @@ class Coach:
         if getattr(self, "check_src", "") == "button":
             self._render_step(f"The Quantity List still shows the default name. Select the measurement, press D, "
                               f"type {want or 'a description'} and press Enter.", ok=False)
+
+    def _exact_description(self, drew):
+        """The description eTakeoff itself stores for the measurement drawn earlier (matched by quantity),
+        or None if eTakeoff hasn't published it yet. Screen reading can misread letters; this can't."""
+        if not drew or not self.watcher:
+            return None
+        key = {"area": "area", "length": "length", "perimeter": "perim"}.get(drew[0])
+        try:
+            rows = self.watcher.read_all().values()
+        except Exception as e:
+            dlog(f"exact description lookup failed: {e!r}")
+            return None
+        for rec in rows:
+            if key and abs((rec.get(key) or 0) - drew[1]) < 0.011 and rec.get("desc") and rec["desc"] != rec["trace"]:
+                return rec["desc"]
+        return None
 
     def _screen_fail(self, parsed, msg, skill):
         # Only count a miss once per distinct result, and not while the learner may still be clicking points.
@@ -2531,7 +2723,8 @@ class Coach:
                "steps_first_try": sum(1 for r in res if r["status"].startswith("passed") and r["score"] == 100),
                "wrong_clicks": sum(r.get("wrong", 0) for r in res), "hints": sum(r.get("hints", 0) for r in res),
                "work_on": [k for _, k in weak],
-               "steps": [{k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items() if k != "t0"} for r in res],
+               "steps": [{k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()
+                          if k != "t0" and not k.startswith("_")} for r in res],
                "project": getattr(self, "project_name", ""), "coach_version": COACH_VERSION}
         self.cloud.queue(rec)
         self.sync_in_background()
@@ -2562,7 +2755,11 @@ class Coach:
                                      "status": "not reached", "score": 0, "wrong": 0, "hints": 0,
                                      "failed": set(), "clicks": 0, "seconds": 0, "note": ""})
         self.step_i = len(LESSON["steps"])
+        self.reviewing = False
         self._hide_overlay()
+        order = {st["id"]: i for i, st in enumerate(LESSON["steps"])}
+        self.results.sort(key=lambda r: order.get(r["id"], 999))
+        self.test_was = bool(self.test)
         scored = [r for r in self.results if not r.get("ungraded")] or self.results
         total = round(sum(r["score"] for r in scored) / len(scored))
         skills = {}
@@ -2580,7 +2777,8 @@ class Coach:
                "lesson_version": LESSON.get("version", 1), "mode": self.mode.get(),
                "project": getattr(self, "project_name", ""), "started": str(getattr(self, "started", "")),
                "score": total, "work_on": [k for _, k in weak],
-               "steps": [{k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items() if k != "t0"} for r in self.results]}
+               "steps": [{k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()
+                          if k != "t0" and not k.startswith("_")} for r in self.results]}
         with open(base + ".json", "w", encoding="utf-8") as fh:
             json.dump(out, fh, indent=1, default=str)
         test = self.test
@@ -2623,10 +2821,18 @@ class Coach:
         if weak:
             tk.Label(self.body, text="Work on:", font=("Segoe UI Semibold", 10), bg="#f4f7fb").pack(anchor="w", pady=(8, 0))
             for sc, k in weak:
-                tk.Label(self.body, text=f"• {k} ({sc:.0f}%) · review guide p. {pages.get(k, '?')}",
+                tk.Label(self.body, text=f"\u2022 {k} ({sc:.0f}%) \u00b7 review guide p. {pages.get(k, '?')}",
                          font=("Segoe UI", 10), bg="#f4f7fb").pack(anchor="w")
         else:
             tk.Label(self.body, text="Every skill at 80% or better.", font=("Segoe UI", 10), bg="#f4f7fb").pack(anchor="w")
+        missed = self._missed_tasks(scored)
+        if missed:
+            tk.Label(self.body, text=("Your test is submitted. Practice what you missed:" if test else
+                                      "Practice what you missed:"),
+                     font=("Segoe UI Semibold", 10), bg="#f4f7fb").pack(anchor="w", pady=(8, 2))
+            for title, lid, steps in missed[:5]:
+                tk.Button(self.body, text=f"\u25b6 {title}", font=("Segoe UI", 9), anchor="w",
+                          command=lambda a=title, b=lid, c=steps: self.start_retry(a, b, c)).pack(fill="x", pady=1)
         row = tk.Frame(self.body, bg="#f4f7fb")
         row.pack(fill="x", side="bottom")
         titles = [l["title"] for l in self.lessons]
