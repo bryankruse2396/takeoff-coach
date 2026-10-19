@@ -1,5 +1,5 @@
 r"""
-Takeoff Coach  v0.20  (prototype)
+Takeoff Coach  v0.21  (prototype)
 ================================
 Coaches a learner through eTakeoff Dimension steps on top of the real program:
   * shows the instruction as a callout over eTakeoff, with an arrow to the button (Practice mode)
@@ -73,7 +73,7 @@ PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dr
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
 
-COACH_VERSION = "0.20"
+COACH_VERSION = "0.21"
 # Training site (Supabase). The publishable key is meant to be public; what each account can do is
 # enforced by the database's security rules.
 SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
@@ -477,7 +477,12 @@ def install_update(manifest, progress=None):
                  f'move /y "{new}" "{EXE_PATH}" >nul\r\n'
                  f'start "" "{EXE_PATH}"\r\n'
                  f'del "%~f0"\r\n')
-    subprocess.Popen(["cmd", "/c", script], creationflags=0x08000000)  # CREATE_NO_WINDOW
+    # The new program must start as a fresh, independent copy. Without this it inherits the packaging
+    # variables of this (closing) copy, looks for files this copy has already removed, and fails with
+    # "Failed to load Python DLL".
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("_PYI", "_MEI"))}
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    subprocess.Popen(["cmd", "/c", script], creationflags=0x08000000, env=env)  # CREATE_NO_WINDOW
 
 
 def read_catalog():
@@ -1184,7 +1189,7 @@ class Coach:
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Takeoff Coach")
+        self.root.title(f"Takeoff Coach {COACH_VERSION}")
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#f4f7fb")
         self.q = queue.Queue()
