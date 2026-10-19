@@ -1,5 +1,5 @@
 r"""
-Takeoff Coach  v0.19  (prototype)
+Takeoff Coach  v0.20  (prototype)
 ================================
 Coaches a learner through eTakeoff Dimension steps on top of the real program:
   * shows the instruction as a callout over eTakeoff, with an arrow to the button (Practice mode)
@@ -69,9 +69,11 @@ HERE = (os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach") if FR
         else os.path.dirname(os.path.abspath(__file__)))
 os.makedirs(HERE, exist_ok=True)
 TARGETS_FILE = os.path.join(HERE, "coach_targets.json")
+PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dragged the callout to
+CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
 
-COACH_VERSION = "0.19"
+COACH_VERSION = "0.20"
 # Training site (Supabase). The publishable key is meant to be public; what each account can do is
 # enforced by the database's security rules.
 SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
@@ -1217,6 +1219,7 @@ class Coach:
         self.cv = tk.Canvas(self.overlay, bg=self.BG, highlightthickness=0)
         self.cv.pack(fill="both", expand=True)
         self.overlay.withdraw()
+        self._build_callout()
         try:
             self.reader = QtyReader()
             self.reader_error = None
@@ -1886,7 +1889,7 @@ class Coach:
         """Inactivity timeout or the learner ended the test: it can't be finished or resumed."""
         t = self.end_test(status)
         self.step_i = len(LESSON["steps"])
-        self.overlay.withdraw()
+        self._hide_overlay()
         self.cv.delete("all")
         self._hide_warning()
         self._clear()
@@ -2351,7 +2354,7 @@ class Coach:
         h, _ = find_etakeoff()
         active = 0 <= self.step_i < len(LESSON["steps"])
         if not h or user32.IsIconic(h) or not active:
-            self.overlay.withdraw()
+            self._hide_overlay()
             return
         l, t, r, b = win_rect(h)
         w, ht = r - l, b - t
@@ -2368,18 +2371,123 @@ class Coach:
             text, good = self.flash[0], True
         else:
             good = False
-        bx, by, bw = int(w * 0.24), int(ht * 0.70), min(560, int(w * 0.45))
-        tid = cv.create_text(bx + 16, by + 12, text=f"{self.step_i + 1}. {text}", anchor="nw", width=bw - 32,
-                             font=("Segoe UI", 13), fill="#1b5e20" if good else "#24384f")
-        x1, y1, x2, y2 = cv.bbox(tid)
-        cv.create_rectangle(bx, by, bx + bw, y2 + 12, fill="#ffffff", outline="#2a7fd0", width=3)
-        cv.tag_raise(tid)
-        show_arrow = s["type"] == "click" and (self.mode.get() == "practice" or self.hint_on) and not good
-        if show_arrow and s.get("target") in self.targets:
-            tx1, ty1, tx2, ty2 = self.targets[s["target"]]
+        target = self.targets.get(s.get("target")) if s["type"] == "click" and not good else None
+        if self.test:
+            # Tests: the task is in the coach window; nothing is drawn on eTakeoff except a used hint's box.
+            self.callout.withdraw()
+            self.callout_text = None
+            if target and self.hint_on:
+                tx1, ty1, tx2, ty2 = target
+                cv.create_rectangle(tx1 - 3, ty1 - 3, tx2 + 3, ty2 + 3, outline="#e53935", width=3)
+            return
+        bx, by, bw, bh = self._show_callout(f"{self.step_i + 1}. {text}", good, l, t, w, ht)
+        if target:
+            tx1, ty1, tx2, ty2 = target
             cv.create_rectangle(tx1 - 3, ty1 - 3, tx2 + 3, ty2 + 3, outline="#e53935", width=3)
-            cv.create_line(bx + bw // 3, by, (tx1 + tx2) // 2, ty2 + 6, fill="#e53935", width=4,
-                           arrow=tk.LAST, arrowshape=(18, 22, 7))
+            # arrow from the callout edge nearest the button
+            cx, cy = (tx1 + tx2) // 2, (ty1 + ty2) // 2
+            sx = min(max(cx, bx + 12), bx + bw - 12)
+            if cy < by:
+                sy, ey = by, ty2 + 6
+            elif cy > by + bh:
+                sy, ey = by + bh, ty1 - 6
+            else:  # button beside the callout
+                sy, ey = cy, cy
+                sx = bx if cx < bx else bx + bw
+                cx = tx2 + 6 if cx < bx else tx1 - 6
+            if not (bx <= cx <= bx + bw and by <= cy <= by + bh):
+                cv.create_line(sx, sy, cx, ey, fill="#e53935", width=4, arrow=tk.LAST, arrowshape=(18, 22, 7))
+
+    # ---------- the instruction callout: a small window of its own, so it can be dragged out of the way
+    def _build_callout(self):
+        try:
+            with open(PREFS_FILE, encoding="utf-8") as fh:
+                self.callout_pos = tuple(json.load(fh).get("callout", CALLOUT_DEFAULT))
+        except Exception:
+            self.callout_pos = CALLOUT_DEFAULT
+        c = self.callout = tk.Toplevel(self.root)
+        c.overrideredirect(True)
+        c.attributes("-topmost", True)
+        c.configure(bg="#2a7fd0")  # shows as the border
+        inner = tk.Frame(c, bg="#ffffff", cursor="fleur")
+        inner.pack(fill="both", expand=True, padx=3, pady=3)
+        self.callout_grip = tk.Label(inner, text="\u2630  drag to move  \u00b7  double-click to reset", bg="#ffffff",
+                                     fg="#8a97a8", font=("Segoe UI", 8), cursor="fleur", anchor="w")
+        self.callout_grip.pack(fill="x", padx=12, pady=(4, 0))
+        self.callout_label = tk.Label(inner, bg="#ffffff", font=("Segoe UI", 13), justify="left", anchor="w",
+                                      cursor="fleur")
+        self.callout_label.pack(fill="both", padx=14, pady=(0, 10))
+        for wdg in (c, inner, self.callout_grip, self.callout_label):
+            wdg.bind("<ButtonPress-1>", self._callout_press)
+            wdg.bind("<B1-Motion>", self._callout_drag)
+            wdg.bind("<ButtonRelease-1>", self._callout_release)
+            wdg.bind("<Double-Button-1>", self._callout_reset)
+        self.callout_text, self.callout_drag = None, None
+        c.withdraw()
+
+    def _callout_press(self, ev):
+        self.callout_drag = (ev.x_root - self.callout.winfo_rootx(), ev.y_root - self.callout.winfo_rooty())
+
+    def _callout_drag(self, ev):
+        if self.callout_drag:
+            dx, dy = self.callout_drag
+            self.callout.geometry(f"+{ev.x_root - dx}+{ev.y_root - dy}")
+
+    def _callout_release(self, ev):
+        if not self.callout_drag:
+            return
+        self.callout_drag = None
+        h, _ = find_etakeoff()
+        if not h:
+            return
+        l, t, r, b = win_rect(h)
+        rx = (self.callout.winfo_rootx() - l) / max(1, r - l)
+        ry = (self.callout.winfo_rooty() - t) / max(1, b - t)
+        self.callout_pos = (min(0.95, max(0.0, rx)), min(0.95, max(0.0, ry)))
+        self._save_prefs()
+        self.draw_overlay()
+
+    def _callout_reset(self, ev=None):
+        self.callout_drag = None
+        self.callout_pos = CALLOUT_DEFAULT
+        self._save_prefs()
+        self.draw_overlay()
+
+    def _save_prefs(self):
+        try:
+            with open(PREFS_FILE, "w", encoding="utf-8") as fh:
+                json.dump({"callout": list(self.callout_pos)}, fh)
+        except OSError as e:
+            dlog(f"could not save prefs: {e!r}")
+
+    def _hide_overlay(self):
+        self.overlay.withdraw()
+        self.callout.withdraw()
+        self.callout_text = None
+
+    def _show_callout(self, text, good, l, t, w, ht):
+        """Place the callout (where the learner left it) and return its box in eTakeoff-window coordinates."""
+        c = self.callout
+        if text != self.callout_text:
+            self.callout_text = text
+            self.callout_label.config(text=text, fg="#1b5e20" if good else "#24384f",
+                                      wraplength=min(520, int(w * 0.42)))
+        c.update_idletasks()
+        cw, ch = c.winfo_reqwidth(), c.winfo_reqheight()
+        if self.callout_drag:  # being dragged: it is where the mouse put it
+            x, y = c.winfo_rootx(), c.winfo_rooty()
+        else:  # follow eTakeoff if its window moves; keep fully on it
+            x = l + min(int(self.callout_pos[0] * w), max(0, w - cw))
+            y = t + min(int(self.callout_pos[1] * ht), max(0, ht - ch))
+            c.geometry(f"+{x}+{y}")
+        if c.state() == "withdrawn":
+            c.deiconify()  # placed first, so it never flashes up in the screen corner
+            c.update_idletasks()
+            # tool window (no taskbar button) that never takes the keyboard from eTakeoff when dragged
+            hwnd = user32.GetAncestor(c.winfo_id(), 2)
+            user32.SetWindowLongW(hwnd, -20, user32.GetWindowLongW(hwnd, -20) | 0x80 | 0x08000000)
+        c.lift()
+        return x - l, y - t, cw, ch
 
     # ---------- results
     def stop_lesson(self):
@@ -2429,7 +2537,7 @@ class Coach:
         self.step_i_locked = -1
         self.results = []
         self.finish_at = None
-        self.overlay.withdraw()
+        self._hide_overlay()
         self.cv.delete("all")
         self._show_start()
 
@@ -2449,7 +2557,7 @@ class Coach:
                                      "status": "not reached", "score": 0, "wrong": 0, "hints": 0,
                                      "failed": set(), "clicks": 0, "seconds": 0, "note": ""})
         self.step_i = len(LESSON["steps"])
-        self.overlay.withdraw()
+        self._hide_overlay()
         scored = [r for r in self.results if not r.get("ungraded")] or self.results
         total = round(sum(r["score"] for r in scored) / len(scored))
         skills = {}
