@@ -189,8 +189,9 @@ class StartScreen:
             g.columnconfigure(1, weight=1)
             tk.Button(b, text="Sign in", font=("Segoe UI Semibold", 10), command=self.sign_in).pack(anchor="e", pady=(4, 0))
         if signed and self.training_project():
-            tk.Label(b, text=f"Training projects: {self.training_project()}  /  {self.training_project(True)}", font=("Segoe UI", 9), fg="#5a6878",
-                     bg="#f4f7fb").pack(anchor="w")
+            tk.Label(b, text=f"Practice project: {self.training_project()}\nTest project: {self.training_project(True)}",
+                     font=("Segoe UI", 9), fg="#5a6878", bg="#f4f7fb", justify="left", anchor="w",
+                     wraplength=int(420 * self.k)).pack(anchor="w", fill="x")
         mrow = tk.Frame(b, bg="#f4f7fb")
         mrow.pack(fill="x", pady=(8, 0))
         tk.Radiobutton(mrow, text="Practice", variable=self.mode, value="practice", bg="#f4f7fb", font=self.font,
@@ -242,8 +243,8 @@ class StartScreen:
                                bg="#f4f7fb", wraplength=int(410 * self.k), justify="left")
         self.status.pack(anchor="w", pady=(8, 4))
         if self.reader is None:
-            ocr = ("Instant checking is off: screen-reading packages are missing. Run the second pip line at the top "
-                   f"of takeoff_coach.py. ({self.reader_error})")
+            ocr = ("Instant checking is off: screen-reading packages are missing. Running from source? Run "
+                   f"pip install -r build/requirements.txt. ({self.reader_error})")
         elif "qtylist" not in self.targets:
             ocr = "Instant checking: click Record Quantity List so the coach can read your results."
         else:
