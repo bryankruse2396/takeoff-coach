@@ -12,11 +12,36 @@ TARGETS_FILE = os.path.join(HERE, "coach_targets.json")
 PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dragged the callout to
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
-COACH_VERSION = "0.26"
-# Training site (Supabase). The publishable key is meant to be public; what each account can do is
-# enforced by the database's security rules.
-SITE_URL = "https://ylhhgqxbngvpqmtceois.supabase.co"
-SITE_KEY = "sb_publishable_H7oV3RkzMEyRfxCQcRjK2w_NdJPz8sT"
+COACH_VERSION = "0.27"
+
+
+def _read_env_file(path):
+    """KEY=value lines from a .env file (blank lines and # comments skipped; quotes around values removed)."""
+    out = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    out[k.strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return out
+
+
+def _setting(name):
+    """A setting from the environment, or from the .env file: next to takeoff_coach.py when run from source,
+    or the one the build machine packed into TakeoffCoach.exe. .env is never committed (see .env.example)."""
+    if os.environ.get(name):
+        return os.environ[name]
+    folder = getattr(sys, "_MEIPASS", None) if FROZEN else HERE
+    return _read_env_file(os.path.join(folder or HERE, ".env")).get(name, "")
+
+
+# Training site (Supabase). Kept out of the code on GitHub: they come from .env (see .env.example).
+SITE_URL = _setting("SUPABASE_URL").rstrip("/")
+SITE_KEY = _setting("SUPABASE_PUBLISHABLE_KEY")
 ACCOUNT_FILE = os.path.join(RESULTS_DIR, "account.json")      # sign-in token, so learners sign in once
 CATALOG_FILE = os.path.join(RESULTS_DIR, "catalog.json")      # last lessons/tests downloaded (works offline)
 OUTBOX_DIR = os.path.join(RESULTS_DIR, "outbox")              # results waiting to upload

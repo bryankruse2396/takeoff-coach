@@ -17,6 +17,9 @@ def self_test():
     import winrt.windows.foundation.collections  # noqa: F401
     from pynput import mouse as _m, keyboard as _k  # noqa: F401
     import coach.app  # noqa: F401  (every part of the coach loads)
+    from coach.config import SITE_KEY, SITE_URL
+    if not (SITE_URL.startswith("https://") and SITE_KEY.startswith("sb_publishable_")):
+        raise SystemExit("The training-site settings (.env) weren't packed into the program.")
     root = tk.Tk()
     pw = _print_window_check(root)
     root.destroy()

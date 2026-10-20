@@ -9,3 +9,6 @@ coach_*.json
 coach_debug.log
 selftest.txt
 lessons/
+
+# secret settings: copy .env.example to .env
+.env

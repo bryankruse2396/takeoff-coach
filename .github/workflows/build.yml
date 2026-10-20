@@ -61,6 +61,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Write .env from the repository secrets (never committed)
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if (-not $env:SUPABASE_URL -or -not $env:SUPABASE_PUBLISHABLE_KEY) {
+            throw "Set the SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY secrets (Settings > Secrets and variables > Actions)."
+          }
+          "SUPABASE_URL=$env:SUPABASE_URL`nSUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY" |
+            Set-Content -Encoding utf8NoBOM .env
+
       - name: Build TakeoffCoach.exe
         run: >
           pyinstaller --noconfirm --onefile --windowed --name TakeoffCoach
@@ -70,6 +82,7 @@ jobs:
           --hidden-import winrt.windows.foundation --hidden-import winrt.windows.foundation.collections
           --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32
           --hidden-import comtypes.client --hidden-import comtypes.stream
+          --add-data ".env;."
           takeoff_coach.py
 
       - name: Self-test the built program

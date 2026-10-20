@@ -34,6 +34,9 @@ class Cloud:
 
     # --- plumbing
     def _http(self, method, path, body=None, token=None, headers=None, timeout=20):
+        if not SITE_URL or not SITE_KEY:
+            raise SiteError("This copy of the coach has no training-site settings. Running from source? Copy "
+                            ".env.example to .env and fill it in.")
         req = urllib.request.Request(SITE_URL + path, method=method,
                                      data=None if body is None else json.dumps(body).encode("utf-8"))
         req.add_header("apikey", SITE_KEY)
