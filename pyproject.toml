@@ -1,0 +1,10 @@
+# Settings for the code checker (ruff) and the tests (pytest). The coach itself is run with takeoff_coach.py.
+[tool.ruff]
+line-length = 130
+extend-exclude = ["build"]
+
+[tool.ruff.lint]
+select = ["F"]  # real mistakes only: undefined names, unused imports and variables
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

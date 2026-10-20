@@ -2,3 +2,10 @@ build/*.spec
 dist/
 __pycache__/
 *.spec
+.pytest_cache/
+.ruff_cache/
+# files the coach writes when run from source
+coach_*.json
+coach_debug.log
+selftest.txt
+lessons/
