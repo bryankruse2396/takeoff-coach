@@ -71,6 +71,18 @@ class StartScreen:
         dlog(f"update available: {manifest.get('version')}")
         if self.step_i < 0 and not self.test:
             self._show_start()
+            self._auto_update()
+
+    def _auto_update(self):
+        """Learners don't have to update: a new version installs itself, but never during a lesson or test.
+        If it can't (offline, blocked), the Update now button stays as a fallback."""
+        if not FROZEN or not getattr(self, "update_info", None) or getattr(self, "auto_update_tried", False):
+            return
+        if self.step_i >= 0 or self.test:
+            return
+        self.auto_update_tried = True
+        dlog(f"installing update {self.update_info.get('version')} automatically")
+        self.apply_update()
 
     def apply_update(self):
         m = self.update_info
@@ -285,6 +297,7 @@ class StartScreen:
         self.start_lesson()
 
     def go_home(self):
+        self.root.after(500, self._auto_update)  # an update found during a lesson installs once it's over
         self.setup_token = None
         self._hide_warning()
         self.step_i = -1

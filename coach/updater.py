@@ -4,7 +4,7 @@ import os
 import urllib.error
 import urllib.request
 
-from coach.config import COACH_VERSION, EXE_PATH, UPDATE_MANIFEST
+from coach.config import COACH_VERSION, EXE_PATH, HERE, UPDATE_MANIFEST
 from coach.log import dlog
 
 
@@ -13,6 +13,18 @@ def version_tuple(v):
         return tuple(int(x) for x in str(v).strip().lstrip("v").split("."))
     except ValueError:
         return (0,)
+
+
+def just_updated():
+    """The version this coach was updated from, if it was just updated (shown once), else None."""
+    path = os.path.join(HERE, "just_updated.txt")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            old = fh.read().strip()
+        os.remove(path)
+        return old if old != COACH_VERSION else None
+    except OSError:
+        return None
 
 
 def check_for_update():
@@ -53,6 +65,11 @@ def install_update(manifest, progress=None):
     if want and h.hexdigest() != want:
         os.remove(new)
         raise RuntimeError("The download was damaged (checksum mismatch). Try again.")
+    try:  # so the new version can say what happened
+        with open(os.path.join(HERE, "just_updated.txt"), "w", encoding="utf-8") as fh:
+            fh.write(COACH_VERSION)
+    except OSError:
+        pass
     script = os.path.join(os.path.dirname(EXE_PATH), "takeoff_coach_update.cmd")
     with open(script, "w", encoding="utf-8") as fh:
         fh.write(f'@echo off\r\n'

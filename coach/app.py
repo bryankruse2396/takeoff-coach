@@ -16,7 +16,7 @@ from coach.lessons import apply_answer_key, tier_label
 from coach.log import dlog
 from coach.ocr import QtyReader
 from coach.qty_list import parse_qty_list
-from coach.updater import check_for_update
+from coach.updater import check_for_update, just_updated
 from coach.winapi import find_etakeoff, foreground_title, pid_of, user32, win_rect
 from coach.ui.start_screen import StartScreen
 from coach.ui.calibration import Calibration
@@ -76,6 +76,9 @@ class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checki
             self.reader, self.reader_error = None, f"{e.__class__.__name__}: {e}"
         self._build_panel()
         self._show_start()
+        old = just_updated()
+        if old:
+            self.status.config(text=f"Takeoff Coach updated itself from {old} to {COACH_VERSION}.", fg="#2e7d32")
         def _click(x, y, button, pressed):  # must return None: returning False stops pynput's listener
             if pressed and button == mouse.Button.left:
                 self.q.put(("click", x, y))
