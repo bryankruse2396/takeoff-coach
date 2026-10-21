@@ -68,15 +68,16 @@ class Checking:
         self.cur["disconnects"] = self.cur.get("disconnects", 0) + 1
         dlog(f"disconnected point #{self.cur['disconnects']} ({how})")
 
-    def _disconnect_problem(self, s):
-        """For steps that must use disconnected points: a message if the learner didn't, else None."""
+    def _disconnect_problem(self, s, rec=None):
+        """For steps that must use disconnected points: a message if the learner didn't, else None.
+        Proof is eTakeoff's own "Group ..." row in the Quantity List, or the G presses / Disconnected Point
+        clicks the coach saw while the step was drawn."""
         need = s.get("min_disconnects", 1 if s.get("disconnected") else 0)
-        have = self.cur.get("disconnects", 0)
-        if have >= need:
+        if need == 0 or (rec and rec.get("groups")) or self.cur.get("disconnects", 0) >= need:
             return None
-        return (f"This line needs {need + 1} separate pieces, and the coach saw {have + 1}. At each door opening, press G "
-                "(or click Disconnected Point) so the opening isn't measured, then start again on the other side. "
-                "Delete this line and try again.")
+        return (f"This needs to be one measurement made of {need + 1} groups, and the coach doesn't see the groups. At the "
+                "end of each piece (at a door opening), press G or click Disconnected Point, then start the next group "
+                "on the other side. Delete this line and try again.")
 
     def check_now(self):
         """Re-read the Quantity List now (and the clipboard, if a measurement was copied)."""
@@ -124,7 +125,7 @@ class Checking:
             return self._grade_description(s, rec["desc"] if rec["desc"] != rec["trace"] else "",
                                            {"area": rec.get("area"), "length": rec.get("length"),
                                             "perimeter": rec.get("perim")}, True)
-        if rec["guid"] in graded and graded[rec["guid"]] != s["id"]:
+        if rec["guid"] in graded and graded[rec["guid"]] not in (s["id"], s.get("continues")):
             return self._render_step("That's the measurement from an earlier step. Draw a new one for this step.", ok=False)
         if self.instructor.get():
             free = {k: v for k, v in s.items() if k not in ("expected", "points", "known")}
@@ -140,8 +141,8 @@ class Checking:
                 return self._pass(msg, partial=(ok == "partial"))
             return self._render_step(msg, ok=False)
         ok, msg, skill = evaluate(s, rec)
-        if ok and self._disconnect_problem(s):
-            ok, msg, skill = False, self._disconnect_problem(s), "Disconnected points"
+        if ok and self._disconnect_problem(s, rec):
+            ok, msg, skill = False, self._disconnect_problem(s, rec), "Disconnected points"
         dlog(f"grade {s['id']}: {ok} {msg}")
         graded[rec["guid"]] = s["id"]
         self.graded = graded
@@ -183,7 +184,8 @@ class Checking:
             return  # a measurement that already passed an earlier step
         rec = screen_rec(parsed)
         # Is it a measurement that existed before this step? (published ones are known exactly)
-        for old in self.watcher.state.values():
+        # Steps that continue an earlier step's measurement (adding a cutout) expect exactly that.
+        for old in ([] if s.get("continues") else self.watcher.state.values()):
             if old["guid"] in self.step_known and any(
                     k in rec["has"] and abs(old[f] - parsed["values"][k]) < 0.006
                     for k, f in (("area", "area"), ("length", "length"), ("perimeter", "perim"))
@@ -232,8 +234,8 @@ class Checking:
                 return "wait"
             return self._screen_fail(parsed, msg, None)
         ok, msg, skill = evaluate(s, rec)
-        if ok and self._disconnect_problem(s):
-            ok, msg, skill = False, self._disconnect_problem(s), "Disconnected points"
+        if ok and self._disconnect_problem(s, rec):
+            ok, msg, skill = False, self._disconnect_problem(s, rec), "Disconnected points"
         dlog(f"grade {s['id']} from screen: {ok} {msg}")
         if not ok and skill == "Choosing the right trace":
             # Which line of the Quantity List is the main quantity is read from its shading, which can be misread.

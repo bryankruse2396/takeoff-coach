@@ -79,12 +79,15 @@ def evaluate(step, rec):
             return False, f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% high: {label}{tip}{pts_note}", step["skill"]
     if step.get("cutout") and r > 1 + pass_tol:
         return False, (f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% more than it should be: the cutout is probably missing "
-                       f"or traced the wrong way. After the outline, press G (or click Disconnected Point) and trace the "
-                       f"cutout counter-clockwise, so it subtracts.{pts_note}"), step["skill"]
+                       f"or traced the wrong way. After the outline, press G (or click Disconnected Point) to start a new "
+                       f"group and trace the cutout counter-clockwise, so it subtracts.{pts_note}"), step["skill"]
     if step.get("disconnected") and r > 1 + pass_tol:
-        return False, (f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% longer than it should be: the gap was probably measured "
-                       f"too. At the end of the first piece, press G (or click Disconnected Point), then start the next piece "
-                       f"on the other side of the gap.{pts_note}"), step["skill"]
+        return False, (f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% longer than it should be: an opening was probably "
+                       f"measured too. At the end of each piece of wall, press G (or click Disconnected Point) to start a "
+                       f"new group on the other side of the opening.{pts_note}"), step["skill"]
+    if step.get("disconnected") and r < 1 - pass_tol:
+        return False, (f"{val:,.2f} {unit} is {100 * (1 - r):.1f}% shorter than it should be: a group (piece of wall) is "
+                       f"probably missing. Check every piece is in the same measurement.{pts_note}"), step["skill"]
     if kind == "perimeter" and 0.45 < r < 0.9:
         return False, f"{val:,.2f} LF looks like one wall is missing. Check you clicked all 4 corners.", step["skill"]
     if abs(r - 1) <= pass_tol:

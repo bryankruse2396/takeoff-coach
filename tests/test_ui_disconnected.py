@@ -16,7 +16,7 @@ def setup_step(c):
 
 def test_g_presses_are_counted_and_required(app):
     setup_step(app)
-    assert "3 separate pieces" in app._disconnect_problem(STEP)
+    assert "3 groups" in app._disconnect_problem(STEP)
     app._disconnect_used("G key")
     assert app._disconnect_problem(STEP)  # one break isn't enough here
     app._disconnect_used("G key")
@@ -44,3 +44,14 @@ def test_a_miss_starts_the_count_over(app):
 def test_steps_without_disconnected_points_dont_care(app):
     setup_step(app)
     assert app._disconnect_problem({"id": "x", "kind": "length"}) is None
+
+
+def test_group_row_on_screen_is_proof_enough(app):
+    from coach.qty_list import screen_rec
+    setup_step(app)
+    rec = screen_rec({"header": "Length", "values": {"length": 13.43, "group length": 8.71}, "primary": "length",
+                      "sig": ("", ())})
+    assert rec["groups"] and rec["length"] == 13.43
+    assert app._disconnect_problem(STEP, rec) is None
+    plain = screen_rec({"header": "Length", "values": {"length": 13.43}, "primary": "length", "sig": ("", ())})
+    assert app._disconnect_problem(STEP, plain)

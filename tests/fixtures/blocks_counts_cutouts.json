@@ -1,0 +1,150 @@
+[
+ {
+  "id": "meas_count",
+  "title": "Count items (toilets)",
+  "answer_key": {},
+  "steps": [
+   {
+    "id": "btn",
+    "type": "click",
+    "target": "trace_count",
+    "also": [
+     "count"
+    ],
+    "skill": "Choosing the right trace",
+    "text": "Pick the Count trace in the Traces control panel.",
+    "test_text": "Select the Count trace.",
+    "ungraded": true
+   },
+   {
+    "id": "cnt",
+    "type": "measure",
+    "kind": "count",
+    "expected": 15,
+    "dwg": "A1.1",
+    "skill": "Counting items",
+    "text": "On 004 A1.1 1st Floor Plan, count every toilet on the floor: click once on each one, all in the same Count measurement. Zoom and pan so you check every restroom and guest bath. Press S when you've clicked them all, then Enter to submit.",
+    "test_text": "On drawing 004 A1.1 1st Floor Plan, count all of the toilets on the floor in one Count measurement. When you're finished, go into Select mode and press Enter to submit."
+   },
+   {
+    "id": "desc",
+    "type": "describe",
+    "of": "cnt",
+    "answer": "Toilets",
+    "skill": "Finish, undo, describe",
+    "text": "Select your count, press D, type  Toilets  and press Enter.",
+    "test_text": "Give that count the description  Toilets ."
+   }
+  ]
+ },
+ {
+  "id": "meas_disconnected",
+  "title": "Measure walls with disconnected points",
+  "answer_key": {},
+  "steps": [
+   {
+    "id": "btn",
+    "type": "click",
+    "target": "trace_length",
+    "also": [
+     "length"
+    ],
+    "skill": "Choosing the right trace",
+    "text": "Pick the Length trace in the Traces control panel.",
+    "test_text": "Select the Length trace.",
+    "ungraded": true
+   },
+   {
+    "id": "walls",
+    "type": "measure",
+    "kind": "length",
+    "expected": 13.01,
+    "disconnected": true,
+    "min_disconnects": 2,
+    "min_points": 6,
+    "dwg": "A1.1",
+    "skill": "Disconnected points",
+    "text": "Zoom to the HVAC Equip. Closet at the top of the Meeting Room on 004 A1.1 1st Floor Plan. Measure the closet's wall along the Meeting Room as one Length measurement in 3 groups, leaving out its two doors (48): click both ends of the first piece of wall, press G (or click Disconnected Point), click both ends of the middle piece, press G again, then click both ends of the last piece. The total comes to about 13 feet. Press S, then Enter to submit.",
+    "test_text": "On drawing 004 A1.1 1st Floor Plan, measure the HVAC Equipment Closet's wall along the Meeting Room as one length measurement, leaving out the door openings. When you're finished, go into Select mode and press Enter to submit."
+   },
+   {
+    "id": "desc",
+    "type": "describe",
+    "of": "walls",
+    "answer": "HVAC Closet Walls",
+    "skill": "Finish, undo, describe",
+    "text": "Select your closet wall measurement, press D, type  HVAC Closet Walls  and press Enter.",
+    "test_text": "Give that measurement the description  HVAC Closet Walls ."
+   }
+  ]
+ },
+ {
+  "id": "meas_cutout",
+  "title": "Cut out areas (pool deck)",
+  "answer_key": {},
+  "steps": [
+   {
+    "id": "btn",
+    "type": "click",
+    "target": "trace_area",
+    "also": [
+     "area"
+    ],
+    "skill": "Choosing the right trace",
+    "text": "Open 004 A1.1 1st Floor Plan and zoom to the Pool Area room. Then pick the Area trace in the Traces control panel.",
+    "test_text": "Select the Area trace.",
+    "ungraded": true
+   },
+   {
+    "id": "room",
+    "type": "measure",
+    "kind": "area",
+    "expected": 1934.85,
+    "dwg": "A1.1",
+    "skill": "Polar mode and direction",
+    "test_skip": true,
+    "text": "Measure the whole Pool Area floor first, pool and spa included for now: trace the room's outline clockwise. Press S, then Enter so the coach can check the room's size."
+   },
+   {
+    "id": "pool",
+    "type": "measure",
+    "kind": "area",
+    "expected": 1382.88,
+    "cutout": true,
+    "continues": "room",
+    "dwg": "A1.1",
+    "skill": "Cutouts",
+    "test_skip": true,
+    "text": "Now take the pool out of that same measurement. Click your Pool Area measurement to select it, press G (or click Disconnected Point) to start a new group, and trace around the pool counter-clockwise, adding a few extra points around each curved end. Go into Select mode and press Enter so the coach can check the area went down by the pool's size."
+   },
+   {
+    "id": "deck",
+    "type": "measure",
+    "kind": "area",
+    "expected": 1325.87,
+    "cutout": true,
+    "continues": "pool",
+    "dwg": "A1.1",
+    "skill": "Cutouts",
+    "known": [
+     [
+      "the spa isn't cut out yet. Start a new group with G and trace the spa counter-clockwise.",
+      1.035,
+      1.055
+     ]
+    ],
+    "text": "Do the same for the spa: with the measurement selected, press G (or click Disconnected Point) to start another group and trace the spa counter-clockwise. Go into Select mode and press Enter to check the final area.",
+    "test_text": "On drawing 004 A1.1 1st Floor Plan, measure the Pool Area floor and subtract the pool and the spa with cutouts, all in one Area measurement. When you're finished, go into Select mode and press Enter to submit."
+   },
+   {
+    "id": "desc",
+    "type": "describe",
+    "of": "deck",
+    "answer": "Pool Deck Area",
+    "skill": "Finish, undo, describe",
+    "text": "Select your pool deck area, press D, type  Pool Deck Area  and press Enter.",
+    "test_text": "Give the pool deck area the description  Pool Deck Area ."
+   }
+  ]
+ }
+]

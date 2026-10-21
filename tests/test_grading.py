@@ -93,7 +93,9 @@ def test_disconnected_gap_measured_is_explained():
     step = {"id": "l", "kind": "length", "expected": 30.0, "disconnected": True, "skill": "Disconnected points"}
     assert evaluate(step, rec(length=30.2, qty=30.2, trace="Length"))[0] is True
     ok, msg, _ = evaluate(step, rec(length=34.0, qty=34.0, trace="Length"))  # the door opening was included
-    assert ok is False and "Disconnected Point" in msg
+    assert ok is False and "Disconnected Point" in msg and "group" in msg
+    ok, msg, _ = evaluate(step, rec(length=20.0, qty=20.0, trace="Length"))  # a piece of wall left out
+    assert ok is False and "missing" in msg
 
 
 def test_lit_button_box_includes_its_icon():

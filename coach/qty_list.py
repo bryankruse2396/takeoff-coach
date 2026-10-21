@@ -126,4 +126,6 @@ def screen_rec(parsed):
             "qty": v.get(p, count if p == "count" else None) if p in ("area", "length", "perimeter", "count") else None,
             "uom": "", "area": v.get("area", 0.0), "length": v.get("length", 0.0), "perim": v.get("perimeter", 0.0),
             "count": count, "points": int(v["point count"]) if "point count" in v else None, "dwg": None,
+            # eTakeoff adds a "Group Length" / "Group Area" row once a measurement has disconnected groups
+            "groups": any(k.startswith("group ") for k in v),
             "has": has, "primary": p}

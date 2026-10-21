@@ -122,6 +122,11 @@ def build_steps(block_ids, blocks, test=False):
             st["id"], st["block"], st["block_title"] = f"{bid}.{sid}", bid, b["title"]
             if st.get("of"):
                 st["of"] = f"{bid}.{st['of']}"
+            skipped = {x["id"] for x in b.get("steps", []) if x.get("test_skip")} if test else set()
+            if st.get("continues") in skipped:
+                st.pop("continues")  # in a test this is one measurement drawn in a single step
+            if st.get("continues"):  # this step keeps working on the measurement from an earlier step
+                st["continues"] = f"{bid}.{st['continues']}"
             if st.get("type") == "measure" and "expected" in st and isinstance(key.get(sid), dict) \
                     and key[sid].get("expected") is not None:
                 st["expected"] = key[sid]["expected"]
