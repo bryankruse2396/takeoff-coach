@@ -51,6 +51,55 @@ def license_text(dist):
     return "\n\n".join(texts)
 
 
+def _first_file(patterns):
+    for pat in patterns:
+        for f in sorted(glob.glob(pat)):
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+    return ""
+
+
+def _download(url):
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            return r.read().decode("utf-8", "replace")
+    except Exception as e:
+        print(f"::warning title=License notices::Couldn't download {url}: {e}")
+        return ""
+
+
+def python_license():
+    """Python's license as installed, or else the official text for this exact version."""
+    roots = {sys.base_prefix, os.path.dirname(sys.executable)}
+    text = _first_file([os.path.join(r, n) for r in roots for n in ("LICENSE.txt", "LICENSE", "LICENSE*")])
+    v = sys.version_info
+    return text or _download(f"https://raw.githubusercontent.com/python/cpython/v{v.major}.{v.minor}.{v.micro}/LICENSE")
+
+
+def tcl_version():
+    try:
+        import tkinter
+        return tkinter.Tcl().eval("info patchlevel")
+    except Exception:
+        return ""
+
+
+def tcl_license():
+    """Tcl/Tk's license as installed, or else the official text for this exact version."""
+    pats = [os.path.join(sys.base_prefix, "tcl", "tcl8*", "license.terms")]
+    try:
+        import tkinter
+        pats.insert(0, os.path.join(tkinter.Tcl().eval("info library"), "license.terms"))
+    except Exception:
+        pass
+    text = _first_file(pats)
+    v = tcl_version()
+    if not text and v:
+        text = _download(f"https://raw.githubusercontent.com/tcltk/tcl/core-{v.replace('.', '-')}/license.terms")
+    return text
+
+
 def main(out_path):
     parts = ["Takeoff Coach - third-party notices",
              "Copyright 2026 Takeoff Training LLC. All rights reserved (Takeoff Coach itself; see LICENSE).",
@@ -61,26 +110,27 @@ def main(out_path):
         try:
             dist = md.distribution(name)
         except md.PackageNotFoundError:
-            missing.append(name)
+            missing.append(f"{name} (not installed)")
             continue
         meta = dist.metadata
         lic = meta.get("License-Expression") or meta.get("License") or ""
         text = license_text(dist) or next((v for k, v in FALLBACK.items() if name.lower().startswith(k)), "")
         if not text:
             missing.append(f"{name} (no license text)")
+        print(f"  {meta['Name']} {dist.version}: {lic.splitlines()[0] if lic else '?'}, {len(text)} characters")
         parts += ["=" * 100, f"{meta['Name']} {dist.version}  ({lic.splitlines()[0] if lic else 'see below'})", "=" * 100]
         if name in NOTES:
             parts += [NOTES[name], ""]
         parts += [text, ""]
     # Python itself and the Tcl/Tk libraries it brings for the coach's window
-    for title, pattern in (("Python " + sys.version.split()[0], os.path.join(sys.base_prefix, "LICENSE*")),
-                           ("Tcl/Tk", os.path.join(sys.base_prefix, "tcl", "tcl8*", "license.terms"))):
-        files = glob.glob(pattern)
-        if files:
-            parts += ["=" * 100, title, "=" * 100, open(files[0], encoding="utf-8", errors="replace").read().strip(), ""]
+    for title, text in (("Python " + sys.version.split()[0], python_license()), ("Tcl/Tk " + tcl_version(), tcl_license())):
+        if text:
+            parts += ["=" * 100, title, "=" * 100, text.strip(), ""]
         elif sys.platform == "win32":
             missing.append(title)
     if missing:
+        for m in missing:
+            print(f"::error title=License notices::No license text found for {m}")
         sys.exit(f"Missing license information for: {', '.join(missing)}")
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(parts) + "\n")
