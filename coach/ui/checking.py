@@ -40,7 +40,7 @@ class Checking:
             self._pass("")
         elif any(inside(k) for k in s.get("also", [])):
             alt = next(k for k in s.get("also", []) if inside(k))
-            self._pass(f"That works too. The guide uses {TARGETS[s['target']]}; {TARGETS[alt]} does the same thing.")
+            self._pass(f"That works too. This lesson uses {TARGETS[s['target']]}; {TARGETS[alt]} does the same thing.")
         else:
             # Clicks on the drawing or side panels are navigation (zoom, pan, select), not wrong answers.
             # A wrong button is a click up in the ribbon band, or on another button the coach knows about.

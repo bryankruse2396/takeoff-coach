@@ -5,6 +5,10 @@ training site (it links to the latest release here) and the program updates itse
 
 The coach only **reads** from eTakeoff (its COM interface and the screen); it never changes a project.
 
+© 2026 Takeoff Training LLC. All rights reserved (see `LICENSE`). Takeoff Training is independent and is not
+affiliated with, sponsored by, or endorsed by eTakeoff, LLC; eTakeoff and eTakeoff Dimension are trademarks of
+their owner. Open-source components and their licenses: `THIRD_PARTY_NOTICES.md`.
+
 ## Publishing a new version
 
 1. Change `COACH_VERSION` in `coach/config.py`.
@@ -49,6 +53,11 @@ If a test fails, nothing is built or released.
 | `test_flow.py` | Tests: start, idle time-out, review, submit |
 | `callout.py` | The instruction callout and arrows over eTakeoff |
 | `results.py` | The results screen and uploading practice sessions |
+
+## Lesson content
+
+Lessons, tests and quizzes are written in Takeoff Training's own words. Don't copy text, exercises or images
+from eTakeoff's training guide or website: describe how the software works in your own words instead.
 
 ## Running it from source (Windows)
 

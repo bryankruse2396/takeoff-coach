@@ -73,7 +73,7 @@ class LessonFlow:
         s = lessons.LESSON["steps"][idx]
         carry = carry or self.parked.pop(s["id"], None)
         self.nudged, self.select_was_active = False, True
-        self.cur = {"id": s["id"], "skill": s["skill"], "page": s["page"], "type": s["type"],
+        self.cur = {"id": s["id"], "skill": s["skill"], "type": s["type"],
                     "ungraded": bool(s.get("ungraded")), "wrong": 0,
                     "hints": 0, "failed": set(), "clicks": 0, "t0": time.time(), "status": "", "note": ""}
         self.hint_on = False
@@ -109,7 +109,7 @@ class LessonFlow:
                                  f"{s.get('block_title', '')}")
         else:
             self.sub.config(text=f"{lessons.LESSON['title']} · {s.get('block_title') or ''}{' · ' if s.get('block_title') else ''}"
-                                 f"Guide p. {s['page']} · {s['skill']}")
+                                 f"{s['skill']}")
         tk.Label(self.body, text=s["text"], font=("Segoe UI", 11), bg="#f4f7fb", wraplength=int(420 * self.k),
                  justify="left").pack(anchor="w")
         if feedback:

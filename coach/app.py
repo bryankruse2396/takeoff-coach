@@ -11,7 +11,7 @@ from pynput import mouse
 
 from coach import lessons
 from coach.cloud import Cloud
-from coach.config import ACTIVE_TEST_FILE, COACH_VERSION
+from coach.config import ACTIVE_TEST_FILE, COACH_VERSION, copy_notices
 from coach.lessons import apply_answer_key, tier_label
 from coach.log import dlog
 from coach.ocr import QtyReader
@@ -32,6 +32,7 @@ class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checki
     BG = "#ff00fe"  # overlay transparency key
 
     def __init__(self):
+        copy_notices()
         self.root = tk.Tk()
         self.root.title(f"Takeoff Coach {COACH_VERSION}")
         self.root.attributes("-topmost", True)
@@ -99,7 +100,7 @@ class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checki
     def _build_panel(self):
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         k = self.k = max(1.0, self.root.winfo_fpixels("1i") / 96)  # Windows display scaling (125%, 150%...)
-        w, h = int(460 * k), int(400 * k)
+        w, h = int(460 * k), int(420 * k)
         self.root.geometry(f"{w}x{h}+{sw - w - int(20 * k)}+{sh - h - int(70 * k)}")
         self.root.minsize(int(380 * k), int(320 * k))
         f = ("Segoe UI", 10)

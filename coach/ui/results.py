@@ -41,7 +41,7 @@ class Results:
         done_ids = {r["id"] for r in self.results}
         for s in lessons.LESSON["steps"]:
             if s["id"] not in done_ids:
-                self.results.append({"id": s["id"], "skill": s["skill"], "page": s["page"], "type": s["type"],
+                self.results.append({"id": s["id"], "skill": s["skill"], "type": s["type"],
                                      "ungraded": bool(s.get("ungraded")),
                                      "status": "not reached", "score": 0, "wrong": 0, "hints": 0,
                                      "failed": set(), "clicks": 0, "seconds": 0, "note": ""})
@@ -60,7 +60,6 @@ class Results:
                 if ms and ms != r["skill"]:
                     skills.setdefault(ms, []).append(50)
         weak = sorted([(sum(v) / len(v), k) for k, v in skills.items() if sum(v) / len(v) < 80])
-        pages = {s["skill"]: s["page"] for s in lessons.LESSON["steps"]}
         os.makedirs(RESULTS_DIR, exist_ok=True)
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
         base = os.path.join(RESULTS_DIR, f"{self.learner.get() or 'learner'}-{stamp}")
@@ -85,9 +84,9 @@ class Results:
             self._upload_practice("completed", total, weak)
         with open(base + ".csv", "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
-            w.writerow(["step", "skill", "guide page", "status", "score", "wrong clicks", "missed attempts", "hints", "seconds", "note"])
+            w.writerow(["step", "skill", "status", "score", "wrong clicks", "missed attempts", "hints", "seconds", "note"])
             for r in self.results:
-                w.writerow([r["id"], r["skill"], r["page"], r["status"], r["score"], r["wrong"],
+                w.writerow([r["id"], r["skill"], r["status"], r["score"], r["wrong"],
                             len(r["failed"]), r["hints"], r.get("seconds", 0), r.get("note", "")])
         self._clear()
         self.h1.config(text=f"Score: {total}%")
@@ -112,7 +111,7 @@ class Results:
         if weak:
             tk.Label(self.body, text="Work on:", font=("Segoe UI Semibold", 10), bg="#f4f7fb").pack(anchor="w", pady=(8, 0))
             for sc, k in weak:
-                tk.Label(self.body, text=f"\u2022 {k} ({sc:.0f}%) \u00b7 review guide p. {pages.get(k, '?')}",
+                tk.Label(self.body, text=f"\u2022 {k} ({sc:.0f}%)",
                          font=("Segoe UI", 10), bg="#f4f7fb").pack(anchor="w")
         else:
             tk.Label(self.body, text="Every skill at 80% or better.", font=("Segoe UI", 10), bg="#f4f7fb").pack(anchor="w")

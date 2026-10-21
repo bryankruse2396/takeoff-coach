@@ -230,7 +230,7 @@ class StartScreen:
                                variable=self.instructor, bg="#f4f7fb", font=self.font).pack(anchor="w", pady=(4, 0))
                 keyed = [st["id"] for st in lessons.LESSON["steps"] if st["id"] in self.answers]
                 tk.Label(b, text=(f"Answer key: yours ({len(keyed)} measurements)" if keyed else
-                                  "Answer key: guide values or the site's"),
+                                  "Answer key: the starting values or the site's"),
                          font=("Segoe UI", 9), fg="#5a6878", bg="#f4f7fb").pack(anchor="w")
             else:
                 self.instructor.set(False)
@@ -251,6 +251,8 @@ class StartScreen:
             ocr = "Instant checking is on (reads the Quantity List)."
         tk.Label(b, text=ocr, font=("Segoe UI", 9), fg="#5a6878", bg="#f4f7fb", wraplength=int(410 * self.k),
                  justify="left").pack(anchor="w")
+        tk.Label(b, text="\u00a9 2026 Takeoff Training LLC \u00b7 not affiliated with eTakeoff, LLC",
+                 font=("Segoe UI", 8), fg="#8a97a8", bg="#f4f7fb").pack(anchor="w", side="bottom", pady=(6, 0))
         row = tk.Frame(b, bg="#f4f7fb")
         row.pack(fill="x", side="bottom")
         row2 = tk.Frame(b, bg="#f4f7fb")

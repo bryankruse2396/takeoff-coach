@@ -20,6 +20,10 @@ def self_test():
     from coach.config import SITE_KEY, SITE_URL
     if not (SITE_URL.startswith("https://") and SITE_KEY.startswith("sb_publishable_")):
         raise SystemExit("The training-site settings (.env) weren't packed into the program.")
+    import sys
+    for name in ("THIRD_PARTY_NOTICES.txt", "LICENSE"):
+        if not os.path.exists(os.path.join(getattr(sys, "_MEIPASS", ""), name)):
+            raise SystemExit(f"{name} wasn't packed into the program.")
     root = tk.Tk()
     pw = _print_window_check(root)
     root.destroy()

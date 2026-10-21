@@ -12,3 +12,4 @@ lessons/
 
 # secret settings: copy .env.example to .env
 .env
+THIRD_PARTY_NOTICES.txt

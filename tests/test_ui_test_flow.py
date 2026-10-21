@@ -6,16 +6,16 @@ from conftest import buttons, write_catalog
 
 BLOCKS = [
     {"id": "meas_area", "title": "Measure an area (Laundry room)", "answer_key": {}, "steps": [
-        {"id": "btn", "type": "click", "target": "trace_area", "skill": "Choosing the right trace", "page": 28,
+        {"id": "btn", "type": "click", "target": "trace_area", "skill": "Choosing the right trace",
          "text": "Practice: click Area.", "test_text": "Select the Area trace.", "ungraded": True},
         {"id": "area", "type": "measure", "kind": "area", "expected": 604.42, "points": 8,
-         "skill": "Polar mode and direction", "page": 28, "text": "Practice: hold Ctrl, 8 corners.",
+         "skill": "Polar mode and direction", "text": "Practice: hold Ctrl, 8 corners.",
          "test_text": "Measure the Laundry Room."},
         {"id": "desc", "type": "describe", "of": "area", "answer": "Laundry Room Area", "skill": "Finish, undo, describe",
-         "page": 28, "text": "Practice: press D.", "test_text": "Describe it."}]},
+         "text": "Practice: press D.", "test_text": "Describe it."}]},
     {"id": "meas_line", "title": "Measure a line segment", "answer_key": {}, "steps": [
         {"id": "len", "type": "measure", "kind": "length", "min_points": 2, "skill": "Choosing the right trace",
-         "page": 16, "text": "Practice: click two ends.", "test_text": "Measure one wall."}]}]
+         "text": "Practice: click two ends.", "test_text": "Measure one wall."}]}]
 
 
 def review_labels(c):

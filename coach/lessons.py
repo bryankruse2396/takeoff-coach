@@ -57,7 +57,7 @@ def lesson_problems(les):
         if need is None:
             p.append(f"step {i}: unknown type '{t}'")
             continue
-        for k in ("id", "text", "skill", "page") + need:
+        for k in ("id", "text", "skill") + need:
             if k not in st:
                 p.append(f"step {i}: missing '{k}'")
         for tg in ([st.get("target")] + list(st.get("also", []))) if t == "click" else []:
@@ -81,7 +81,7 @@ def read_answer_file():
 
 
 def apply_answer_key():
-    """Instructor-recorded answers replace the guide's numbers (eTakeoff results depend on where walls are clicked).
+    """Instructor-recorded answers replace the starting numbers (eTakeoff results depend on where walls are clicked).
     Returns this lesson's part of the answer file."""
     ans = read_answer_file().get(LESSON["id"], {})
     for st in LESSON["steps"]:
@@ -101,7 +101,7 @@ def read_catalog():
 
 def build_steps(block_ids, blocks, test=False):
     """Coach steps for a list of blocks. Step ids become 'block.step' so every block's steps stay distinct,
-    and the block's answer key (recorded in Instructor mode) replaces the guide values.
+    and the block's answer key (recorded in Instructor mode) replaces the starting values.
     test=True: a test states the task, not the method: test_text replaces the practice wording, and
     steps marked test_skip are left out. Steps marked ungraded (e.g. "Select the Area trace", which points
     the learner at the right trace) still run but don't count toward the score."""

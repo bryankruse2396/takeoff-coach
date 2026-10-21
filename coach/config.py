@@ -12,7 +12,7 @@ TARGETS_FILE = os.path.join(HERE, "coach_targets.json")
 PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dragged the callout to
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
-COACH_VERSION = "0.29"
+COACH_VERSION = "0.30"
 
 
 def _read_env_file(path):
@@ -37,6 +37,20 @@ def _setting(name):
         return os.environ[name]
     folder = getattr(sys, "_MEIPASS", None) if FROZEN else HERE
     return _read_env_file(os.path.join(folder or HERE, ".env")).get(name, "")
+
+
+def copy_notices():
+    """Put the license notices packed into TakeoffCoach.exe where the learner can read them."""
+    if not FROZEN:
+        return
+    import shutil
+    for name in ("THIRD_PARTY_NOTICES.txt", "LICENSE"):
+        src = os.path.join(getattr(sys, "_MEIPASS", ""), name)
+        if os.path.exists(src):
+            try:
+                shutil.copyfile(src, os.path.join(RESULTS_DIR, "LICENSE.txt" if name == "LICENSE" else name))
+            except OSError:
+                pass
 
 
 # Training site (Supabase). Kept out of the code on GitHub: they come from .env (see .env.example).

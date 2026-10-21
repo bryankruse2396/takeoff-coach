@@ -73,6 +73,9 @@ jobs:
           "SUPABASE_URL=$env:SUPABASE_URL`nSUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY" |
             Set-Content -Encoding utf8NoBOM .env
 
+      - name: Collect the open-source license notices
+        run: python build/make_notices.py THIRD_PARTY_NOTICES.txt
+
       - name: Build TakeoffCoach.exe
         run: >
           pyinstaller --noconfirm --onefile --windowed --name TakeoffCoach
@@ -83,6 +86,8 @@ jobs:
           --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32
           --hidden-import comtypes.client --hidden-import comtypes.stream
           --add-data ".env;."
+          --add-data "THIRD_PARTY_NOTICES.txt;."
+          --add-data "LICENSE;."
           takeoff_coach.py
 
       - name: Self-test the built program

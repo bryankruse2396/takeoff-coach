@@ -3,7 +3,7 @@ import time
 
 from conftest import buttons, press
 
-STEPS = [{"id": "a", "type": "measure", "kind": "area", "dwg": "A1.1", "text": "x", "skill": "s", "page": 1}]
+STEPS = [{"id": "a", "type": "measure", "kind": "area", "dwg": "A1.1", "text": "x", "skill": "s"}]
 
 
 def wait_for_watch(c, seconds=2.3):
