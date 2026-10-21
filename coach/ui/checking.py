@@ -3,7 +3,7 @@ import time
 
 from coach import lessons
 from coach.builtin_lessons import RIBBON, TARGETS
-from coach.grading import evaluate, points_matter
+from coach.grading import evaluate, measured, points_matter
 from coach.log import dlog
 from coach.qty_list import DEFAULT_NAMES, screen_rec
 from coach.textmatch import exact_text, same_text
@@ -105,7 +105,7 @@ class Checking:
             free = {k: v for k, v in s.items() if k not in ("expected", "points", "known")}
             ok, msg, _ = evaluate(free, rec)
             if ok:
-                val = {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[s["kind"]]
+                val = measured(rec, s["kind"])
                 if "expected" in s:
                     self.answers[s["id"]] = {"expected": round(val, 2), "points": rec["points"]}
                     self.save_answers()
@@ -189,7 +189,7 @@ class Checking:
             free = {k: v for k, v in s.items() if k not in ("expected", "points", "known")}
             ok, msg, _ = evaluate(free, rec)
             if ok and "expected" in s:
-                val = {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[kind]
+                val = measured(rec, kind)
                 entry = {"expected": round(val, 2)}
                 if rec["points"]:
                     entry["points"] = rec["points"]
@@ -197,7 +197,7 @@ class Checking:
                 self.save_answers()
                 msg = f"Saved {val:,.2f} as the answer key."
             if ok:
-                self.cur["graded_val"] = (kind, {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[kind])
+                self.cur["graded_val"] = (kind, measured(rec, kind))
                 self.passed_vals.add(parsed["sig"][1])
                 self.cur["_passed_sig"] = parsed["sig"][1]
                 return self._pass(msg, partial=(ok == "partial"))
@@ -221,7 +221,7 @@ class Checking:
                                       "measurement once, wait a second, then click Check again.", ok=False)
                 return "wait" if not forced else None
         if ok:
-            self.cur["graded_val"] = (kind, {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[kind])
+            self.cur["graded_val"] = (kind, measured(rec, kind))
             self.passed_vals.add(parsed["sig"][1])
             self.cur["_passed_sig"] = parsed["sig"][1]
             return self._pass(msg, partial=(ok == "partial"))
@@ -330,7 +330,7 @@ class Checking:
                 st = steps.get(r["id"])
                 if not st or st["type"] != "measure" or r.get("verified"):
                     continue
-                val = {"area": rec["area"], "length": rec["length"], "perimeter": rec["perim"]}[st["kind"]]
+                val = measured(rec, st["kind"])
                 if r["status"] == "passed" and r.get("graded_val") and abs(r["graded_val"][1] - val) < 0.011:
                     ok, msg, _ = evaluate(st, rec)
                     r["verified"] = {"points": rec["points"], "drawing": rec["dwg"], "trace": rec["trace"]}

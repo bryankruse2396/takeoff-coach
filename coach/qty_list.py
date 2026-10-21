@@ -113,8 +113,17 @@ def screen_rec(parsed):
     """A measurement record built from the Quantity List (same shape as the eTakeoff-data records)."""
     v = parsed["values"]
     p = parsed["primary"]
+    has = set(v)
+    # A Count trace lists its number as "Count" (or only "Point Count", with no area, length or perimeter)
+    count = v.get("count")
+    if count is None and "point count" in v and not has & {"area", "length", "perimeter"}:
+        count = v["point count"]
+    if count is not None:
+        has.add("count")
+    if p == "point count" and count is not None:
+        p = "count"
     return {"guid": None, "desc": parsed["header"], "trace": parsed["header"],
-            "qty": v.get(p) if p in ("area", "length", "perimeter", "count") else None, "uom": "",
-            "area": v.get("area", 0.0), "length": v.get("length", 0.0), "perim": v.get("perimeter", 0.0),
-            "points": int(v["point count"]) if "point count" in v else None, "dwg": None,
-            "has": set(v), "primary": p}
+            "qty": v.get(p, count if p == "count" else None) if p in ("area", "length", "perimeter", "count") else None,
+            "uom": "", "area": v.get("area", 0.0), "length": v.get("length", 0.0), "perim": v.get("perimeter", 0.0),
+            "count": count, "points": int(v["point count"]) if "point count" in v else None, "dwg": None,
+            "has": has, "primary": p}

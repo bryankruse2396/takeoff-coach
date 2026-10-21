@@ -45,3 +45,52 @@ def test_wrong_trace_message_from_the_screen_reads_naturally():
 
 def test_with_article():
     assert with_article("Area") == "an Area" and with_article("Length") == "a Length"
+
+
+# --- counts, cutouts and disconnected lines
+COUNT_STEP = {"id": "c", "kind": "count", "expected": 12, "skill": "Counting items"}
+
+
+def count_rec(n):
+    return {"area": 0.0, "length": 0.0, "perim": 0.0, "qty": float(n), "trace": "Count", "points": n, "dwg": None}
+
+
+def test_count_must_be_exact_and_doesnt_give_the_answer():
+    assert evaluate(COUNT_STEP, count_rec(12))[0] is True
+    ok, msg, _ = evaluate(COUNT_STEP, count_rec(11))
+    assert ok is False and "too few" in msg and "12" not in msg
+    ok, msg, _ = evaluate(COUNT_STEP, count_rec(13))
+    assert ok is False and "too many" in msg and "12" not in msg
+
+
+def test_count_without_answer_key_passes_any_count():
+    ok, msg, _ = evaluate({"id": "c", "kind": "count", "skill": "s"}, count_rec(1))
+    assert ok is True and "1 counted" in msg
+
+
+def test_count_read_off_the_screen():
+    parsed = {"header": "Count", "values": {"count": 12.0}, "primary": "count", "sig": ("", ())}
+    rec = screen_rec(parsed)
+    assert "count" in rec["has"] and evaluate(COUNT_STEP, rec)[0] is True
+    parsed = {"header": "Count", "values": {"point count": 12.0}, "primary": "point count", "sig": ("", ())}
+    rec = screen_rec(parsed)
+    assert "count" in rec["has"] and evaluate(COUNT_STEP, rec)[0] is True
+
+
+def test_area_used_for_a_count_is_the_wrong_trace():
+    ok, msg, skill = evaluate(COUNT_STEP, rec(area=50.0, perim=30.0, qty=50.0, trace="Area", points=12))
+    assert ok is False and skill == "Choosing the right trace"
+
+
+def test_cutout_missing_is_explained():
+    step = {"id": "p", "kind": "area", "expected": 2000.0, "cutout": True, "skill": "Cutouts"}
+    assert evaluate(step, rec(area=2010.0))[0] is True
+    ok, msg, _ = evaluate(step, rec(area=2600.0))  # the pool wasn't subtracted
+    assert ok is False and "cutout" in msg and "counter-clockwise" in msg
+
+
+def test_disconnected_gap_measured_is_explained():
+    step = {"id": "l", "kind": "length", "expected": 30.0, "disconnected": True, "skill": "Disconnected points"}
+    assert evaluate(step, rec(length=30.2, qty=30.2, trace="Length"))[0] is True
+    ok, msg, _ = evaluate(step, rec(length=34.0, qty=34.0, trace="Length"))  # the door opening was included
+    assert ok is False and "Disconnected Point" in msg
