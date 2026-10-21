@@ -33,3 +33,17 @@ def test_answer_key_replaces_guide_values_and_links_describe_steps():
 
 def test_unknown_blocks_are_skipped():
     assert build_steps(["nope"], BLOCKS) == []
+
+
+def test_tests_keep_only_some_descriptions():
+    import random
+    from coach.lessons import pick_descriptions
+    steps = [{"id": f"m{i}", "type": "measure"} for i in range(10)] + [{"id": f"d{i}", "type": "describe"} for i in range(10)]
+    kept = pick_descriptions(steps, 20, random.Random(1))
+    assert len([s for s in kept if s["type"] == "measure"]) == 10
+    assert len([s for s in kept if s["type"] == "describe"]) == 2
+    few = pick_descriptions(steps[:10] + steps[10:12], 20, random.Random(1))  # 2 descriptions: still at least one
+    assert len([s for s in few if s["type"] == "describe"]) == 1
+    assert pick_descriptions(steps, None) == steps  # older databases: keep them all
+    assert not [s for s in pick_descriptions(steps, 0) if s["type"] == "describe"]
+    assert [s["id"] for s in kept] == [s["id"] for s in steps if s in kept]  # order unchanged

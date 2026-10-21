@@ -8,7 +8,7 @@ import tkinter as tk
 from coach import lessons
 from coach.cloud import Offline
 from coach.config import ACTIVE_TEST_FILE, COACH_VERSION
-from coach.lessons import build_steps, lesson_problems, read_catalog
+from coach.lessons import build_steps, lesson_problems, pick_descriptions, read_catalog
 from coach.log import dlog
 from coach.winapi import find_etakeoff
 
@@ -48,7 +48,8 @@ class TestFlow:
                   "drawing": "004 A1.1 1st Floor Plan", "scale": "3/32\" = 1'-0\"",
                   "grading": {"full_credit_within": 0.03, "pass_within": 0.10, "partial_score": 75},
                   "block_ids": [b["id"] for b in blocks],
-                  "steps": build_steps([b["id"] for b in blocks], blocks, test=True)}
+                  "steps": pick_descriptions(build_steps([b["id"] for b in blocks], blocks, test=True),
+                                             info.get("describe_percent"))}
         problems = lesson_problems(lessons.LESSON)
         if problems or not lessons.LESSON["steps"]:
             dlog(f"test {info['id']} can't run: {problems}")

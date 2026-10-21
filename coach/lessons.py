@@ -135,6 +135,18 @@ def build_steps(block_ids, blocks, test=False):
     return steps
 
 
+def pick_descriptions(steps, percent, rng=None):
+    """A test asks for only some of the descriptions practice has: keep about `percent`% of the describe steps,
+    chosen at random, and at least one when percent is above 0 (so naming is still tested). None keeps all."""
+    import random
+    desc = [s for s in steps if s.get("type") == "describe"]
+    if percent is None or percent >= 100 or not desc:
+        return steps
+    n = 0 if percent <= 0 else max(1, round(len(desc) * percent / 100))
+    keep = {s["id"] for s in (rng or random).sample(desc, min(n, len(desc)))}
+    return [s for s in steps if s.get("type") != "describe" or s["id"] in keep]
+
+
 def lessons_from_catalog(cat):
     out = []
     for les in cat.get("lessons") or []:
