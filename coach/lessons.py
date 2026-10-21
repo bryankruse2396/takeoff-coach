@@ -63,8 +63,8 @@ def lesson_problems(les):
         for tg in ([st.get("target")] + list(st.get("also", []))) if t == "click" else []:
             if tg not in TARGETS:
                 p.append(f"step {i}: unknown button '{tg}' (known: {', '.join(TARGETS)})")
-        if t == "measure" and st.get("kind") not in ("area", "length", "perimeter"):
-            p.append(f"step {i}: kind must be area, length or perimeter")
+        if t == "measure" and st.get("kind") not in ("area", "length", "perimeter", "count"):
+            p.append(f"step {i}: kind must be area, length, perimeter or count")
     return p
 
 

@@ -23,8 +23,8 @@ The coach finds eTakeoff's buttons and Quantity List by reading the screen when 
 If it can't, "Record manually" lets you point them out (hover + F8).
 
 Privacy: while a lesson runs it records mouse clicks inside the eTakeoff window
-and reads measurement quantities. During a lesson it reacts only to S and Enter pressed in
-eTakeoff (the "finish measurement" keys) and nothing typed is recorded; during "Record" it
+and reads measurement quantities. During a lesson it reacts only to S, G and Enter pressed in
+eTakeoff (finish, new piece, submit) and nothing typed is recorded; during "Record" it
 reacts only to F8. Results are saved to Documents\TakeoffCoach and sent to your account on the
 training site: the lesson or test, time spent, each step's result and score. Nothing you type is sent.
 """

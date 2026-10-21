@@ -9,12 +9,13 @@ TARGETS = {
     "area": "Area (Home tab)",
     "perimeter": "Perimeter (Home tab)",
     "count": "Count (Home tab)",
+    "disconnected": "Disconnected Point (Home tab)",
     "trace_area": "Area (Traces panel)",
     "trace_count": "Count (Traces panel)",
     "trace_length": "Length (Traces panel)",
     "trace_perimeter": "Perimeter (Traces panel)",
 }
-RIBBON = ("multiselect", "select", "length", "area", "perimeter", "count")
+RIBBON = ("multiselect", "select", "length", "area", "perimeter", "count", "disconnected")
 # Screen areas the coach reads (recorded the same way as buttons).
 PANES = {
     "qtylist": "the Quantity List pane",

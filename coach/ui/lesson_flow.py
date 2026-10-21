@@ -41,11 +41,13 @@ class LessonFlow:
         self.started_utc = datetime.datetime.now(datetime.timezone.utc)
         self.last_activity = time.time()
         if self.lesson_kb is None:
-            def _finish_key(k):  # only S and Enter matter; nothing else is looked at or kept
+            def _finish_key(k):  # only S, G and Enter matter; nothing else is looked at or kept
                 if k == keyboard.Key.enter:
                     self.q.put(("finish", "enter"))
                 elif getattr(k, "char", None) in ("s", "S"):
                     self.q.put(("finish", "s"))
+                elif getattr(k, "char", None) in ("g", "G"):
+                    self.q.put(("disconnect", "g"))
             self.lesson_kb = keyboard.Listener(on_press=_finish_key)
             self.lesson_kb.start()
         self.results = []
@@ -221,6 +223,7 @@ class LessonFlow:
     def _miss(self, msg):
         """Feedback after a missed attempt. In a test the coach doesn't coach: the detail is kept for the
         results (shown on the site afterwards) but the learner only hears that it isn't right yet."""
+        self.cur["disconnects"] = 0  # the next try is drawn from scratch
         if self.test:
             self.cur.setdefault("misses", []).append(msg)
             return self._render_step("That isn't right yet. Check your work, fix it or redraw it, and submit again.", ok=False)

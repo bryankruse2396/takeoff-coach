@@ -33,6 +33,8 @@ def fit_button(tb, rgb, W, H):
         y2 = cy
         while y2 < ty2 + hh and close(tx1 - 2, y2 + 1):
             y2 += 1
+        # the icon left of the label isn't orange, so the walk above stops at it; the button includes it
+        x1 = min(x1, int(tx1 - 1.9 * hh))
         return [x1 - 1, y1 - 1, x2 + 1, y2 + 1]
 
     return None  # not lit up; the outline comes from hovering instead
@@ -77,6 +79,13 @@ def locate_targets(lines, W, H, rgb=None):
                 ws += [u for u in rib if u is not v and abs(u["y"] - v["y"]) < v["h"] * 0.7
                        and -2 <= u["x"] - (v["x"] + v["w"]) < v["h"] * 2.5 and norm(u["text"]).startswith("select")][:1]
             found["multiselect"] = box(ws, "multiselect")
+            used += ws
+            break
+    for v in rib:
+        if norm(v["text"]).startswith("disconn"):
+            ws = [v] + [u for u in rib if u is not v and abs(u["y"] - v["y"]) < v["h"] * 0.7
+                        and -2 <= u["x"] - (v["x"] + v["w"]) < v["h"] * 2.5 and norm(u["text"]).startswith("point")][:1]
+            found["disconnected"] = box(ws, "disconnected")
             used += ws
             break
     close = lambda a, b: a == b or difflib.SequenceMatcher(None, a, b).ratio() >= 0.75  # forgive "5elect", "Lenght"

@@ -94,3 +94,18 @@ def test_disconnected_gap_measured_is_explained():
     assert evaluate(step, rec(length=30.2, qty=30.2, trace="Length"))[0] is True
     ok, msg, _ = evaluate(step, rec(length=34.0, qty=34.0, trace="Length"))  # the door opening was included
     assert ok is False and "Disconnected Point" in msg
+
+
+def test_lit_button_box_includes_its_icon():
+    from coach.find_buttons import fit_button
+    W, H = 200, 60
+    px = [[(240, 240, 240)] * W for _ in range(H)]
+    for y in range(15, 45):            # an orange (lit) button from x=40 to x=150
+        for x in range(40, 150):
+            px[y][x] = (250, 140, 40)
+    for y in range(20, 40):            # its icon, not orange, at x=44..62
+        for x in range(44, 62):
+            px[y][x] = (30, 60, 160)
+    rgb = bytes(c for row in px for p in row for c in p)
+    box = fit_button((70, 24, 130, 36), rgb, W, H)  # the label's text box
+    assert box and box[0] <= 46, box

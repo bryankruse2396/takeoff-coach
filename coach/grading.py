@@ -75,7 +75,8 @@ def evaluate(step, rec):
     for label, lo, hi in step.get("known", []):
         # "bath and elevator included" only makes sense if corners were skipped to get there
         if lo <= r <= hi and not (step.get("points") and (rec.get("points") or 0) >= step["points"]):
-            return False, f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% high: {label}. Click around them.{pts_note}", step["skill"]
+            tip = "" if label.endswith(".") else ". Click around them."
+            return False, f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% high: {label}{tip}{pts_note}", step["skill"]
     if step.get("cutout") and r > 1 + pass_tol:
         return False, (f"{val:,.2f} {unit} is {100 * (r - 1):.1f}% more than it should be: the cutout is probably missing "
                        f"or traced the wrong way. After the outline, press G (or click Disconnected Point) and trace the "

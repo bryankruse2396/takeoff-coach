@@ -134,6 +134,8 @@ class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checki
                     self.last_activity = time.time()
                 if ev[0] == "click":
                     self.on_click(ev[1], ev[2])
+                elif ev[0] == "disconnect":
+                    self._disconnect_used("G key")
                 elif ev[0] == "f8" and self.recording:
                     self._record_capture()
                 elif ev[0] == "finish":

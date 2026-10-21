@@ -7,7 +7,7 @@ from coach.grading import evaluate, measured, points_matter
 from coach.log import dlog
 from coach.qty_list import DEFAULT_NAMES, screen_rec
 from coach.textmatch import exact_text, same_text
-from coach.winapi import click_is_in_etakeoff, find_etakeoff, user32, win_rect
+from coach.winapi import click_is_in_etakeoff, find_etakeoff, pid_of, user32, win_rect
 
 
 class Checking:
@@ -32,10 +32,12 @@ class Checking:
         self.last_click_t, self.last_click_xy = now, (x, y)
         s = lessons.LESSON["steps"][self.step_i]
         self.cur["clicks"] += 1
-        if s["type"] != "click":
-            return
         inside = lambda k: k in self.targets and (lambda b: l + b[0] - 3 <= x <= l + b[2] + 3 and
                                                                 t + b[1] - 3 <= y <= t + b[3] + 3)(self.targets[k])
+        if s["type"] == "measure" and inside("disconnected"):
+            return self._disconnect_used("Disconnected Point button")
+        if s["type"] != "click":
+            return
         if inside(s["target"]):
             self._pass("")
         elif any(inside(k) for k in s.get("also", [])):
@@ -52,6 +54,29 @@ class Checking:
             self.cur["wrong"] += 1
             self._render_step("Not quite. Try again." if self.test else
                               f"Not quite. That wasn't {TARGETS[s['target']]}. Try again.", ok=False)
+
+    def _disconnect_used(self, how):
+        """The learner started a new piece of the same measurement (G or the Disconnected Point button)."""
+        if not (0 <= self.step_i < len(lessons.LESSON["steps"])) or getattr(self, "step_i_locked", -1) == self.step_i:
+            return
+        s = lessons.LESSON["steps"][self.step_i]
+        if s["type"] != "measure":
+            return
+        h, _ = find_etakeoff()
+        if how == "G key" and not (h and pid_of(user32.GetForegroundWindow()) == pid_of(h)):
+            return  # G typed somewhere else
+        self.cur["disconnects"] = self.cur.get("disconnects", 0) + 1
+        dlog(f"disconnected point #{self.cur['disconnects']} ({how})")
+
+    def _disconnect_problem(self, s):
+        """For steps that must use disconnected points: a message if the learner didn't, else None."""
+        need = s.get("min_disconnects", 1 if s.get("disconnected") else 0)
+        have = self.cur.get("disconnects", 0)
+        if have >= need:
+            return None
+        return (f"This line needs {need + 1} separate pieces, and the coach saw {have + 1}. At each door opening, press G "
+                "(or click Disconnected Point) so the opening isn't measured, then start again on the other side. "
+                "Delete this line and try again.")
 
     def check_now(self):
         """Re-read the Quantity List now (and the clipboard, if a measurement was copied)."""
@@ -115,6 +140,8 @@ class Checking:
                 return self._pass(msg, partial=(ok == "partial"))
             return self._render_step(msg, ok=False)
         ok, msg, skill = evaluate(s, rec)
+        if ok and self._disconnect_problem(s):
+            ok, msg, skill = False, self._disconnect_problem(s), "Disconnected points"
         dlog(f"grade {s['id']}: {ok} {msg}")
         graded[rec["guid"]] = s["id"]
         self.graded = graded
@@ -205,6 +232,8 @@ class Checking:
                 return "wait"
             return self._screen_fail(parsed, msg, None)
         ok, msg, skill = evaluate(s, rec)
+        if ok and self._disconnect_problem(s):
+            ok, msg, skill = False, self._disconnect_problem(s), "Disconnected points"
         dlog(f"grade {s['id']} from screen: {ok} {msg}")
         if not ok and skill == "Choosing the right trace":
             # Which line of the Quantity List is the main quantity is read from its shading, which can be misread.
@@ -235,12 +264,15 @@ class Checking:
         name = (name or "").strip()
         of = s.get("of", "len")
         drew = next((r.get("graded_val") for r in self.results if r.get("id") == of and r.get("graded_val")), None)
-        have = (values or {}).get(drew[0]) if drew else None
+        values = values or {}
+        if drew and drew[0] == "count" and "count" not in values:
+            values = {**values, "count": values.get("point count")}  # the Quantity List may say Point Count
+        have = values.get(drew[0]) if drew else None
         if forced:
             dlog(f"check for step {s['id']}: name '{name}' values {values} (want '{want}' on {of} = {drew})")
         if drew and (have is None or abs(have - drew[1]) > 0.02):
             if forced:
-                unit = "SF" if drew[0] == "area" else "LF"
+                unit = {"area": "SF", "count": "EA"}.get(drew[0], "LF")
                 self._render_step(f"That's a different measurement. Click the {drew[0]} you drew earlier "
                                   f"({drew[1]:,.2f} {unit}) so the Quantity List shows it, then press D.", ok=False)
             return
@@ -321,7 +353,8 @@ class Checking:
                 if kind_ev in ("NEW", "CHANGED") and rec.get("desc") and rec["desc"] != rec["trace"] \
                         and same_text(rec["desc"], cur.get("answer") or rec["desc"]):
                     self._grade_description(cur, rec["desc"], {"area": rec["area"], "length": rec["length"],
-                                                               "perimeter": rec["perim"]}, False)
+                                                               "perimeter": rec["perim"], "count": rec.get("points")},
+                                            False)
                     break
         for kind_ev, rec, _ in events:
             if kind_ev != "NEW" or rec["guid"] in self.watcher.baseline_guids:
