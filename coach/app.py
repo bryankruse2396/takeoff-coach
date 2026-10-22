@@ -26,9 +26,10 @@ from coach.ui.lesson_flow import LessonFlow
 from coach.ui.checking import Checking
 from coach.ui.callout import Callout
 from coach.ui.results import Results
+from coach.ui.screen_watch import ScreenWatch
 
 
-class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checking, Callout, Results):
+class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checking, Callout, Results, ScreenWatch):
     BG = "#ff00fe"  # overlay transparency key
 
     def __init__(self):
@@ -227,6 +228,9 @@ class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checki
                 if tag == "scan":
                     self._scan_done(lines, err, w, h, rgb)
                     continue
+                if tag in ("dwg", "traces"):
+                    self._on_watch_read(tag, lines, err)
+                    continue
                 if tag == "test":
                     if not self.status.winfo_exists():
                         continue
@@ -268,6 +272,7 @@ class Coach(StartScreen, Calibration, ProjectCheck, TestFlow, LessonFlow, Checki
                     self.on_qtylist(parsed, forced=False)  # passes as soon as the right name shows; never fails
         except queue.Empty:
             pass
+        self._watch_tick()
         if not (0 <= self.step_i < len(lessons.LESSON["steps"])):
             return
         box = self.qty_box()

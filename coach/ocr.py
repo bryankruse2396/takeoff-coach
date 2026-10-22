@@ -81,6 +81,9 @@ class QtyReader:
                     self.results.put((tag, ocr(full, 0, 0, 2 if max(w, h) * 2 < 9000 else 1), None, w, h, rgb))
                     continue
 
+                if tag in ("dwg", "traces"):  # the drawing name, or the Traces list: plain text with positions
+                    self.results.put((tag, ocr(full, 0, 0, 3 if tag == "dwg" else 2), None, w, h, rgb))
+                    continue
                 lines = ocr(full, 0, 0, 2)
                 if count_rows(lines) == 0:
                     # Nothing read as "number + name". Try again larger, then in clean black-and-white

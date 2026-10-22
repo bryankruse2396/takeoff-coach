@@ -19,3 +19,17 @@ def drawing_codes(steps):
 def on_drawings(rec, codes):
     d = (rec.get("dwg") or "").upper()
     return any(re.search(r"(^|\s)" + re.escape(c.upper()) + r"(\s|$)", d) for c in codes)
+
+
+_DIGITS = str.maketrans({"I": "1", "l": "1", "i": "1", "|": "1", "O": "0", "o": "0"})
+
+
+def open_sheet(text):
+    """The sheet code in a drawing name read off the screen ('004 A1.3 3RD FLOOR PLAN' -> 'A1.3'),
+    forgiving OCR's usual misreads (AI.1, A1.l). None if there isn't one."""
+    for tok in (text or "").replace(",", ".").split():
+        for pat in (r"^([A-Za-z])([0-9IlOo|][0-9IlOo|.]*)$", r"^([A-Za-z]{2})([0-9IlOo|][0-9IlOo|.]*)$"):
+            m = re.match(pat, tok)
+            if m and any(c.isdigit() for c in m.group(2)):
+                return (m.group(1).upper() + m.group(2).translate(_DIGITS)).rstrip(".")
+    return None

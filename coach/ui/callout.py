@@ -39,6 +39,12 @@ class Callout:
         else:
             good = False
         target = self.targets.get(s.get("target")) if s["type"] == "click" and not good else None
+        if not good and not self.test:
+            wrong = self.wrong_drawing(s)
+            if wrong:  # on the wrong drawing: show how to get to the right one first
+                text, target = self.wrong_drawing_text(*wrong), self.targets.get("dwg_box")
+            elif self._is_trace_step(s) and getattr(self, "trace_hidden", None) == s["target"]:
+                text = f"{text}\n{self.trace_hidden_text(s)}"
         if self.test:
             # Tests: the task is in the coach window; nothing is drawn on eTakeoff except a used hint's box.
             self.callout.withdraw()

@@ -40,6 +40,8 @@ class Checking:
             return self._disconnect_used("Disconnected Point button")
         if s["type"] != "click":
             return
+        if s["target"].startswith("trace_") and self.in_traces_pane(x - l, y - t):
+            return self.note_trace_click(x - l, y - t)  # judged on a fresh reading (the list may have scrolled)
         if inside(s["target"]):
             self._pass("")
         elif any(inside(k) for k in s.get("also", [])):

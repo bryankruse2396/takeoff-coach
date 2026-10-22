@@ -123,6 +123,25 @@ def locate_targets(lines, W, H, rgb=None):
             if cy < tbot:
                 found["trace_" + key] = [int(max(0, tt["x"] - th)), int(cy - 0.95 * hh),
                                          int(right if right else tt["x"] + 12 * th), int(cy + 0.95 * hh)]
+        # the list itself, re-read during "pick the trace" steps (the learner may scroll it or resize the panel)
+        found["traces_pane"] = [int(max(0, tt["x"] - th)), int(tt["y"] + 0.9 * th),
+                                int(right if right else tt["x"] + 12 * th), int(min(tbot, H))]
+    # The drawing box in the Navigation group ("004 A1.1 1ST FLOOR PLAN"), read to know which drawing is open.
+    nav = [v for v in rib if norm(v["text"]) == "navigation"]
+    if nav:
+        nv = min(nav, key=lambda v: v["y"])
+        ncx = nv["x"] + nv["w"] / 2
+        cands = [ln for ln in lines if ln.get("words") and ln["y"] < nv["y"] - nv["h"]
+                 and re.match(r"^\s*\d{2,4}\s+\S", ln["text"]) and abs(ln["x"] - ncx) < 12 * nv["h"]]
+        if cands:
+            ln = min(cands, key=lambda c: (c["y"], abs(c["x"] - ncx)))
+            ws = ln["words"]
+            hh = max(v["h"] for v in ws)
+            x1 = ws[0]["x"] - 0.5 * hh
+            x2 = max(2 * ncx - x1, max(v["x"] + v["w"] for v in ws) + hh)
+            if "select" in found:
+                x2 = min(x2, found["select"][0] - 4)
+            found["dwg_box"] = [int(max(0, x1)), int(ln["y"] - 0.9 * hh), int(x2), int(ln["y"] + 0.9 * hh)]
     # Select sits on its orange highlight and OCR sometimes can't read it. It is the button
     # directly above Multi-Select, one ribbon row up (the same spacing as Area -> Count).
     if "select" not in found and "multiselect" in found:
@@ -169,3 +188,37 @@ def pane_right_edge(rgb, W, H, x0, y0, y1):
         if dark > 0.6 * len(ys):
             return x - 1
     return W - 1
+
+
+TRACE_ORDER = ("area", "count", "length", "perimeter")
+
+
+def trace_rows(lines, W, H):
+    """Where the basic traces' rows are in a reading of just the Traces list (boxes relative to it).
+    Only rows actually showing: one OCR missed between two it read is filled in at the same spacing,
+    but nothing is guessed below the last row it read (it may be scrolled out of sight)."""
+    norm = lambda t: re.sub(r"[^a-z]", "", t.lower())
+    close = lambda a, b: a == b or difflib.SequenceMatcher(None, a, b).ratio() >= 0.75
+    rows = {}
+    for key in TRACE_ORDER:
+        hits = []
+        for ln in lines:
+            ws = ln.get("words") or []
+            if not ws or len(ws) > 2:
+                continue
+            # the whole row is the name ("Area", not "Roof Area"); a swatch may read as one stray letter
+            if close(norm(ln["text"]), key) or (len(ws) == 2 and len(norm(ws[0]["text"])) <= 1
+                                                and close(norm(ws[1]["text"]), key)):
+                hh = max(v["h"] for v in ws)
+                if ln["y"] - 0.5 * hh >= 0 and ln["y"] + 0.5 * hh <= H:
+                    hits.append((ws[0]["x"], ln["y"], hh))
+        if hits:
+            _, cy, hh = min(hits)  # the top-level row (traces inside folders are indented)
+            rows[key] = (cy, hh)
+    known = sorted(rows, key=TRACE_ORDER.index)
+    for a, b in zip(known, known[1:]):
+        ia, ib = TRACE_ORDER.index(a), TRACE_ORDER.index(b)
+        pitch = (rows[b][0] - rows[a][0]) / (ib - ia)
+        for i in range(ia + 1, ib):
+            rows[TRACE_ORDER[i]] = (rows[a][0] + (i - ia) * pitch, rows[a][1])
+    return {k: [0, int(cy - 0.95 * hh), int(W - 1.5 * hh), int(cy + 0.95 * hh)] for k, (cy, hh) in rows.items()}

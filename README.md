@@ -52,6 +52,7 @@ If a test fails, nothing is built or released.
 | `checking.py` | Checking what the learner did: clicks, measurements, descriptions |
 | `test_flow.py` | Tests: start, idle time-out, review, submit |
 | `callout.py` | The instruction callout and arrows over eTakeoff |
+| `screen_watch.py` | Which drawing is open (wrong drawing: how to get to the right one), and following the Traces list when it's scrolled |
 | `results.py` | The results screen and uploading practice sessions |
 
 ## Lesson content

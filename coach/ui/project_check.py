@@ -34,6 +34,7 @@ class ProjectCheck:
 
     def preflight(self, then, test=False, steps=None):
         """Only train in the learner's own project, and start tests on clean drawings. Calls then() when ready."""
+        self._stop_dwg_watch()
         want = self.training_project(test)
         h, title = find_etakeoff()
         if not h:
@@ -155,11 +156,30 @@ class ProjectCheck:
         self.status.pack(anchor="w", pady=(8, 0))
         bottom = tk.Frame(self.body, bg="#f4f7fb")
         bottom.pack(fill="x", side="bottom")
-        tk.Button(bottom, text="Back", font=self.font, command=self.go_home).pack(side="left")
+        leave = lambda go: (lambda: (self._stop_dwg_watch(), go()))
+        tk.Button(bottom, text="Back", font=self.font, command=leave(self.go_home)).pack(side="left")
         if not test:
-            tk.Button(bottom, text="Start anyway", font=self.font, command=then).pack(side="left", padx=6)
+            tk.Button(bottom, text="Start anyway", font=self.font, command=leave(then)).pack(side="left", padx=6)
         tk.Button(bottom, text="Check again", font=("Segoe UI Semibold", 10),
                   command=lambda: self.preflight(then, test, steps)).pack(side="right")
+
+        def show_dwg():  # which drawing is open now (read off the Navigation box), and how to get to the right one
+            have = getattr(self, "dwg_now", None)
+            try:
+                if not have or not self.status.winfo_exists():
+                    return
+            except Exception:
+                return
+            if any(have.upper() == c.upper() for c in codes):
+                self.status.config(text=f"You're on {have}. Now clear it as above, then click Check again.", fg="#2e7d32")
+            else:
+                self.status.config(text=f"You're on {have} now. First open {sheets}: on the Home tab, in Navigation, "
+                                        f"click the drawing list and pick {sheets}.", fg="#a15c00")
+        self.watch_codes, self.on_dwg_change = codes, show_dwg
+        show_dwg()
+
+    def _stop_dwg_watch(self):
+        self.watch_codes = self.on_dwg_change = None
 
     def _test_pool_steps(self, test_id):
         """Steps of every block a test can draw (to know which drawings must be clean)."""
