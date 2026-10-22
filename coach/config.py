@@ -12,7 +12,7 @@ TARGETS_FILE = os.path.join(HERE, "coach_targets.json")
 PREFS_FILE = os.path.join(HERE, "coach_prefs.json")       # where the learner dragged the callout to
 CALLOUT_DEFAULT = (0.24, 0.70)                            # top-left of the callout, as a fraction of eTakeoff's window
 RESULTS_DIR = os.path.join(os.path.expanduser("~"), "Documents", "TakeoffCoach")
-COACH_VERSION = "0.35"
+COACH_VERSION = "0.36"
 
 
 def _read_env_file(path):

@@ -103,6 +103,8 @@ class LessonFlow:
 
     def _render_step(self, feedback="", ok=None):
         s = lessons.LESSON["steps"][self.step_i]
+        if s["type"] == "info":
+            return self._render_info(s)
         self._clear()
         self.h1.config(text=f"Step {self.step_i + 1} of {len(lessons.LESSON['steps'])}")
         if self.test:
@@ -135,6 +137,24 @@ class LessonFlow:
         tk.Button(row, text="Skip step", command=self.skip, font=self.font).pack(side="left", padx=6)
         tk.Button(row, text="End test" if self.test else "Stop lesson", command=self.stop_lesson,
                   font=self.font).pack(side="right")
+
+    def _render_info(self, s):
+        """A block's opening (what you'll learn and why) or closing (what you can do now) screen. Not graded."""
+        self._clear()
+        intro = s.get("kind") == "intro"
+        self.h1.config(text=s.get("block_title") or lessons.LESSON["title"])
+        self.sub.config(text=f"{lessons.LESSON['title']} \u00b7 {'Before you start' if intro else 'Block finished'}")
+        tk.Label(self.body, text="What you'll learn" if intro else "What you can do now", font=("Segoe UI Semibold", 11),
+                 bg="#f4f7fb").pack(anchor="w")
+        tk.Label(self.body, text=s["text"], font=("Segoe UI", 11), bg="#f4f7fb", wraplength=int(420 * self.k),
+                 justify="left").pack(anchor="w", pady=(4, 0))
+        row = tk.Frame(self.body, bg="#f4f7fb")
+        row.pack(fill="x", side="bottom")
+        if self._back_target() is not None:
+            tk.Button(row, text="\u2190 Back", command=self.go_back, font=self.font).pack(side="left", padx=(0, 6))
+        tk.Button(row, text="Start" if intro else "Continue", font=("Segoe UI Semibold", 10),
+                  command=lambda: self._close_step("passed", 100)).pack(side="right")
+        tk.Button(row, text="Stop lesson", command=self.stop_lesson, font=self.font).pack(side="right", padx=6)
 
     def hint(self):
         self.cur["hints"] += 1

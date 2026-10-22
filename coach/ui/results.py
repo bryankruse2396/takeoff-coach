@@ -18,13 +18,13 @@ class Results:
         if not hasattr(self, "started_utc") or not self.cloud.signed_in:
             return
         ended = datetime.datetime.now(datetime.timezone.utc)
-        res = self.results or []
+        res = [r for r in (self.results or []) if r.get("type") != "info"]  # intro and recap screens aren't results
         rec = {"client_id": str(uuid.uuid4()), "mode": "practice", "lesson_id": lessons.LESSON["id"], "title": lessons.LESSON["title"],
                "tier": lessons.LESSON.get("tier"), "status": status,
                "block_ids": list(dict.fromkeys(st.get("block") for st in lessons.LESSON["steps"] if st.get("block"))),
                "started_at": self.started_utc.isoformat(), "ended_at": ended.isoformat(),
                "seconds": int((ended - self.started_utc).total_seconds()), "score": total,
-               "steps_total": len(lessons.LESSON["steps"]),
+               "steps_total": sum(1 for st in lessons.LESSON["steps"] if st["type"] != "info"),
                "steps_first_try": sum(1 for r in res if r["status"].startswith("passed") and r["score"] == 100),
                "wrong_clicks": sum(r.get("wrong", 0) for r in res), "hints": sum(r.get("hints", 0) for r in res),
                "work_on": [k for _, k in weak],
@@ -68,7 +68,7 @@ class Results:
                "project": getattr(self, "project_name", ""), "started": str(getattr(self, "started", "")),
                "score": total, "work_on": [k for _, k in weak],
                "steps": [{k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()
-                          if k != "t0" and not k.startswith("_")} for r in self.results]}
+                          if k != "t0" and not k.startswith("_")} for r in self.results if r.get("type") != "info"]}
         with open(base + ".json", "w", encoding="utf-8") as fh:
             json.dump(out, fh, indent=1, default=str)
         test = self.test
@@ -86,6 +86,8 @@ class Results:
             w = csv.writer(fh)
             w.writerow(["step", "skill", "status", "score", "wrong clicks", "missed attempts", "hints", "seconds", "note"])
             for r in self.results:
+                if r.get("type") == "info":
+                    continue
                 w.writerow([r["id"], r["skill"], r["status"], r["score"], r["wrong"],
                             len(r["failed"]), r["hints"], r.get("seconds", 0), r.get("note", "")])
         self._clear()

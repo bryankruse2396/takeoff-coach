@@ -16,6 +16,8 @@ class Checking:
     def on_click(self, x, y):
         if self.step_i < 0 or self.step_i >= len(lessons.LESSON["steps"]) or getattr(self, "step_i_locked", -1) == self.step_i:
             return
+        if lessons.LESSON["steps"][self.step_i]["type"] == "info":
+            return  # an intro or recap screen: nothing to check
         px, py, pw, ph = self.root.winfo_rootx(), self.root.winfo_rooty(), self.root.winfo_width(), self.root.winfo_height()
         if px <= x <= px + pw and py <= y <= py + ph:
             return  # click on the coach panel
@@ -158,6 +160,8 @@ class Checking:
         Returns 'wait' when a miss might just be a measurement still being drawn (checked again shortly)."""
         if self.step_i < 0 or self.step_i >= len(lessons.LESSON["steps"]) or getattr(self, "step_i_locked", -1) == self.step_i:
             return
+        if lessons.LESSON["steps"][self.step_i]["type"] == "info":
+            return  # an intro or recap screen: nothing to check
         s = lessons.LESSON["steps"][self.step_i]
         if s["type"] == "click" and parsed:
             # Picking a trace (Traces panel or ribbon) shows that trace, still empty, in the Quantity List.

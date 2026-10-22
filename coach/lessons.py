@@ -53,7 +53,7 @@ def lesson_problems(les):
             p.append(f"missing '{k}'")
     for i, st in enumerate(les.get("steps", []), 1):
         t = st.get("type")
-        need = {"click": ("target",), "measure": ("kind",), "describe": ()}.get(t)
+        need = {"click": ("target",), "measure": ("kind",), "describe": (), "info": ()}.get(t)
         if need is None:
             p.append(f"step {i}: unknown type '{t}'")
             continue
@@ -112,6 +112,10 @@ def build_steps(block_ids, blocks, test=False):
         if not b:
             continue
         key = b.get("answer_key") or {}
+        if not test and (b.get("intro") or "").strip():
+            # practice opens each block with what you'll learn and why (tests just give the task)
+            steps.append({"id": f"{bid}.intro", "type": "info", "kind": "intro", "text": b["intro"].strip(),
+                          "skill": "What you'll learn", "ungraded": True, "block": bid, "block_title": b["title"]})
         for st in b.get("steps", []):
             if test and st.get("test_skip"):
                 continue
@@ -132,6 +136,9 @@ def build_steps(block_ids, blocks, test=False):
                 st["expected"] = key[sid]["expected"]
                 st["points"] = key[sid].get("points", st.get("points"))
             steps.append(st)
+        if not test and (b.get("recap") or "").strip():
+            steps.append({"id": f"{bid}.recap", "type": "info", "kind": "recap", "text": b["recap"].strip(),
+                          "skill": "What you can do now", "ungraded": True, "block": bid, "block_title": b["title"]})
     return steps
 
 

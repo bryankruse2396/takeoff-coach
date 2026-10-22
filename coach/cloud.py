@@ -131,7 +131,7 @@ class Cloud:
                                      "&select=id,title,tier,description,draw_count,pass_score,inactivity_minutes,sort"
                                      "&order=sort"),
             "blocks": self.api("GET", "/rest/v1/blocks?coach_ready=eq.true"
-                                      "&select=id,title,tier,topic,steps,answer_key,version"),
+                                      "&select=id,title,tier,topic,steps,answer_key,version,intro,recap"),
             "downloaded": datetime.datetime.now().isoformat(timespec="seconds"),
         }
         with open(CATALOG_FILE, "w", encoding="utf-8") as fh:

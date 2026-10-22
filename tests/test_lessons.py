@@ -47,3 +47,15 @@ def test_tests_keep_only_some_descriptions():
     assert pick_descriptions(steps, None) == steps  # older databases: keep them all
     assert not [s for s in pick_descriptions(steps, 0) if s["type"] == "describe"]
     assert [s["id"] for s in kept] == [s["id"] for s in steps if s in kept]  # order unchanged
+
+
+def test_practice_opens_and_closes_blocks_with_intro_and_recap():
+    from coach.lessons import lesson_problems
+    blocks = [{**BLOCKS[0], "intro": "You'll learn areas.", "recap": "You can measure areas."}]
+    practice = build_steps(["meas_area"], blocks)
+    assert practice[0]["type"] == "info" and practice[0]["kind"] == "intro" and practice[0]["ungraded"]
+    assert practice[-1]["type"] == "info" and practice[-1]["kind"] == "recap"
+    assert lesson_problems({"id": "x", "title": "x", "steps": [practice[0], practice[-1]]}) == []
+    test = build_steps(["meas_area"], blocks, test=True)
+    assert not [s for s in test if s["type"] == "info"]
+    assert not [s for s in build_steps(["meas_area"], BLOCKS) if s["type"] == "info"]  # none written: none shown

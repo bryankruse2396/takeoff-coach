@@ -16,7 +16,7 @@ class Callout:
         if time.time() < getattr(self, "showing_found_until", 0):
             return
         h, _ = find_etakeoff()
-        active = 0 <= self.step_i < len(lessons.LESSON["steps"])
+        active = 0 <= self.step_i < len(lessons.LESSON["steps"]) and lessons.LESSON["steps"][self.step_i]["type"] != "info"
         if not h or user32.IsIconic(h) or not active:
             self._hide_overlay()
             return
