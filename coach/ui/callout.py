@@ -26,9 +26,12 @@ class Callout:
             self.overlay.deiconify()
             self.overlay.update_idletasks()
             make_click_through(self.overlay)
-        self.overlay.geometry(f"{w}x{ht}+{l}+{t}")
-        cv = self.cv
-        cv.delete("all")
+            self._overlay_geo = self._overlay_shapes = None
+        geo = f"{w}x{ht}+{l}+{t}"
+        if geo != getattr(self, "_overlay_geo", None):
+            self.overlay.geometry(geo)
+            self._overlay_geo = geo
+        shapes = []  # what to draw; the canvas is only redrawn when this changes, so nothing flickers
         s = lessons.LESSON["steps"][self.step_i]
         text = s["text"]
         if self.flash and time.time() < self.flash[1]:
@@ -42,12 +45,13 @@ class Callout:
             self.callout_text = None
             if target and self.hint_on:
                 tx1, ty1, tx2, ty2 = target
-                cv.create_rectangle(tx1 - 3, ty1 - 3, tx2 + 3, ty2 + 3, outline="#e53935", width=3)
+                shapes.append(("rect", tx1 - 3, ty1 - 3, tx2 + 3, ty2 + 3))
+            self._draw_shapes(shapes)
             return
         bx, by, bw, bh = self._show_callout(f"{self.step_i + 1}. {text}", good, l, t, w, ht)
         if target:
             tx1, ty1, tx2, ty2 = target
-            cv.create_rectangle(tx1 - 3, ty1 - 3, tx2 + 3, ty2 + 3, outline="#e53935", width=3)
+            shapes.append(("rect", tx1 - 3, ty1 - 3, tx2 + 3, ty2 + 3))
             # arrow from the callout edge nearest the button
             cx, cy = (tx1 + tx2) // 2, (ty1 + ty2) // 2
             sx = min(max(cx, bx + 12), bx + bw - 12)
@@ -60,7 +64,23 @@ class Callout:
                 sx = bx if cx < bx else bx + bw
                 cx = tx2 + 6 if cx < bx else tx1 - 6
             if not (bx <= cx <= bx + bw and by <= cy <= by + bh):
-                cv.create_line(sx, sy, cx, ey, fill="#e53935", width=4, arrow=tk.LAST, arrowshape=(18, 22, 7))
+                shapes.append(("arrow", sx, sy, cx, ey))
+        self._draw_shapes(shapes)
+
+    def _draw_shapes(self, shapes):
+        """Redraw the overlay only when the box or arrow actually changed (redrawing every tick flickers)."""
+        cv = self.cv
+        # also redraw if another screen cleared or drew on the canvas since (calibration does)
+        if shapes == getattr(self, "_overlay_shapes", None) and cv.find_all() == getattr(self, "_overlay_items", None):
+            return
+        self._overlay_shapes = shapes
+        cv.delete("all")
+        for kind, x1, y1, x2, y2 in shapes:
+            if kind == "rect":
+                cv.create_rectangle(x1, y1, x2, y2, outline="#e53935", width=3)
+            else:
+                cv.create_line(x1, y1, x2, y2, fill="#e53935", width=4, arrow=tk.LAST, arrowshape=(18, 22, 7))
+        self._overlay_items = cv.find_all()
 
     def _build_callout(self):
         try:
@@ -175,6 +195,7 @@ class Callout:
             c.lift()
 
     def _hide_overlay(self):
+        self._overlay_geo = self._overlay_shapes = None
         self.overlay.withdraw()
         self.callout.withdraw()
         self.callout_text = None
@@ -201,5 +222,7 @@ class Callout:
             # tool window (no taskbar button) that never takes the keyboard from eTakeoff when dragged
             hwnd = user32.GetAncestor(c.winfo_id(), 2)
             user32.SetWindowLongW(hwnd, -20, user32.GetWindowLongW(hwnd, -20) | 0x80 | 0x08000000)
-        c.lift()
+            c.lift()
+        elif self.ticks % 30 == 0:  # keep it above the overlay now and then, not on every redraw
+            c.lift()
         return x - l, y - t, cw, ch

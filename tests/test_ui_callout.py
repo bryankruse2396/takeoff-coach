@@ -63,3 +63,28 @@ def test_wrong_trace_from_screen_is_rechecked_with_etakeoff_data(app):
     assert ex and ex["trace"] == "Area"
     app.watcher.read_all = lambda: {}
     assert app._exact_record(parsed) is None
+
+
+def test_arrow_is_not_redrawn_when_nothing_changed(app):
+    """Redrawing the box and arrow on every tick made them flicker; only redraw when they change."""
+    from coach import lessons
+    lessons.LESSON.clear()
+    lessons.LESSON.update({"id": "x", "title": "x", "grading": {},
+                           "steps": [{"id": "ms", "type": "click", "target": "multiselect", "text": "Click Multi-Select."}]})
+    app.test, app.step_i, app.flash, app.showing_found_until = None, 0, None, 0
+    app.targets["multiselect"] = (380, 120, 500, 150)
+    app.callout_pos = (0.3, 0.8)
+    app.draw_overlay()
+    app.root.update()
+    first = app.cv.find_all()
+    assert len(first) == 2  # the box and the arrow
+    for _ in range(5):
+        app.draw_overlay()
+    app.root.update()
+    assert app.cv.find_all() == first  # same drawing kept, never erased
+    app.cv.delete("all")  # another screen cleared it
+    app.draw_overlay()
+    assert len(app.cv.find_all()) == 2
+    app.targets["multiselect"] = (600, 120, 720, 150)  # the button moved: redraw
+    app.draw_overlay()
+    assert app.cv.find_all() != first
